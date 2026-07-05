@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+youtub/
+venv/
+.venv/
+
+# Build outputs
+dist/
+build/
+.buildozer/
+packaging/
+bin/
+
+# IDE
+.vscode/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
