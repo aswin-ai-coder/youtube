@@ -4,9 +4,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from core.download_service import DownloadWorker
-from core.models import DownloadOptions, QueueStatus
-from core.queue_service import QueueItem, QueueService
+from app.core.download_service import DownloadWorker
+from app.core.models import DownloadOptions, QueueStatus
+from app.core.queue_service import QueueItem, QueueService
 
 
 class DownloadCoordinator(QObject):

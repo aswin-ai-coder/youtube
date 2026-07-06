@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
-from utils.validators import is_supported_url
+from app.utils.validators import is_supported_url
 
 
 class ClipboardMonitor(QObject):

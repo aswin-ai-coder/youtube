@@ -6,7 +6,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication
 
-from core.history_service import HistoryService
+from app.core.history_service import HistoryService
 
 
 class HistoryActions:

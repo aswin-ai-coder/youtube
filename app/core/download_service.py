@@ -6,7 +6,7 @@ from typing import Any
 from PySide6.QtCore import QThread, Signal
 from yt_dlp import YoutubeDL
 
-from core.models import DownloadKind, DownloadOptions
+from app.core.models import DownloadKind, DownloadOptions
 
 
 class DownloadService:

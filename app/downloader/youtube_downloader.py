@@ -3,20 +3,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from core.download_service import DownloadService
-from core.history_service import HistoryService
-from core.models import (
+from app.core.download_service import DownloadService
+from app.core.history_service import HistoryService
+from app.core.models import (
     DownloadOptions,
     DownloadKind,
     PlaylistMetadata,
     SubtitleTrack,
     VideoMetadata,
 )
-from core.playlist_service import PlaylistService
-from core.settings_service import SettingsService
-from core.subtitle_service import SubtitleService
-from core.thumbnail_service import ThumbnailService
-from core.youtube_service import YouTubeService
+from app.core.playlist_service import PlaylistService
+from app.core.settings_service import SettingsService
+from app.core.subtitle_service import SubtitleService
+from app.core.thumbnail_service import ThumbnailService
+from app.core.youtube_service import YouTubeService
 
 
 class YouTubeDownloader:

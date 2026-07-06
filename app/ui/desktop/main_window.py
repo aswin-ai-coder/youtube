@@ -12,26 +12,26 @@ from PySide6.QtWidgets import (
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar
 from PySide6.QtWidgets import QPushButton, QSplitter, QTabWidget, QVBoxLayout, QWidget
 
-from core.history_service import HistoryService
-from core.playlist_service import PlaylistMetadata, PlaylistService
-from core.queue_service import QueueService
-from core.settings_service import SettingsService
-from core.update_service import UpdateService
-from core.youtube_service import YouTubeService
-from ui.desktop.batch_dialog import BatchUrlDialog
-from ui.desktop.clipboard_monitor import ClipboardMonitor
-from ui.desktop.download_coordinator import DownloadCoordinator
-from ui.desktop.download_options_panel import build_download_widget
-from ui.desktop.history_actions import HistoryActions
-from ui.desktop.history_panel import HistoryPanel
-from ui.desktop.notifications import NotificationService
-from ui.desktop.queue_item_factory import QueueItemFactory
-from ui.desktop.queue_panel import QueuePanel
-from ui.desktop.settings_dialog import SettingsDialog
-from ui.desktop.theme import apply_desktop_theme
-from ui.desktop.video_panel import VideoPanel
-from utils.helpers import download_thumbnail, format_duration, format_number
-from utils.validators import is_supported_url
+from app.core.history_service import HistoryService
+from app.core.playlist_service import PlaylistMetadata, PlaylistService
+from app.core.queue_service import QueueService
+from app.core.settings_service import SettingsService
+from app.core.update_service import UpdateService
+from app.core.youtube_service import YouTubeService
+from app.ui.desktop.batch_dialog import BatchUrlDialog
+from app.ui.desktop.clipboard_monitor import ClipboardMonitor
+from app.ui.desktop.download_coordinator import DownloadCoordinator
+from app.ui.desktop.download_options_panel import build_download_widget
+from app.ui.desktop.history_actions import HistoryActions
+from app.ui.desktop.history_panel import HistoryPanel
+from app.ui.desktop.notifications import NotificationService
+from app.ui.desktop.queue_item_factory import QueueItemFactory
+from app.ui.desktop.queue_panel import QueuePanel
+from app.ui.desktop.settings_dialog import SettingsDialog
+from app.ui.desktop.theme import apply_desktop_theme
+from app.ui.desktop.video_panel import VideoPanel
+from app.utils.helpers import download_thumbnail, format_duration, format_number
+from app.utils.validators import is_supported_url
 
 
 class MainWindow(QMainWindow):

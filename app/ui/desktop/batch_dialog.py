@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QPlainTextEdit
 from PySide6.QtWidgets import QVBoxLayout
 
-from utils.validators import is_supported_url
+from app.utils.validators import is_supported_url
 
 
 class BatchUrlDialog(QDialog):

@@ -1,6 +1,6 @@
 from PySide6.QtGui import QPixmap
 
-from core.thumbnail_service import ThumbnailService
+from app.core.thumbnail_service import ThumbnailService
 
 
 def download_thumbnail(url: str) -> QPixmap | None:

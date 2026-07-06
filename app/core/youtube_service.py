@@ -4,7 +4,7 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 
-from core.models import MediaFormat, SubtitleTrack, VideoMetadata
+from app.core.models import MediaFormat, SubtitleTrack, VideoMetadata
 
 
 class YouTubeService:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from core.models import DownloadKind
-from core.playlist_service import PlaylistMetadata
-from core.queue_service import QueueItem
-from ui.desktop.playlist_dialog import PlaylistSelectionDialog
+from app.core.models import DownloadKind
+from app.core.playlist_service import PlaylistMetadata
+from app.core.queue_service import QueueItem
+from app.ui.desktop.playlist_dialog import PlaylistSelectionDialog
 
 
 class QueueItemFactory:

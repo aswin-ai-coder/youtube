@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterable
 from uuid import uuid4
 
-from core.models import DownloadKind, QueueStatus
+from app.core.models import DownloadKind, QueueStatus
 
 
 @dataclass(slots=True)

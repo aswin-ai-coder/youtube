@@ -4,7 +4,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QListWidget, QPushButton
 from PySide6.QtWidgets import QVBoxLayout
 
-from core.queue_service import QueueItem
+from app.core.queue_service import QueueItem
 
 
 class QueuePanel(QFrame):
