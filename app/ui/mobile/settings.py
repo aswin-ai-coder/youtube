@@ -7,7 +7,7 @@ from kivy.uix.spinner import Spinner
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.uix.textinput import TextInput
 
-from core.settings_service import SettingsService
+from app.core.settings_service import SettingsService
 
 
 class SettingsPage(TabbedPanelItem):

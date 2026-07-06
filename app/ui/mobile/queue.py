@@ -8,7 +8,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.uix.widget import Widget
 
-from ui.mobile.state import mobile_manager
+from app.ui.mobile.state import mobile_manager
 
 
 class QueuePage(TabbedPanelItem):

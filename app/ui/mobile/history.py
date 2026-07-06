@@ -7,7 +7,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.uix.widget import Widget
 
-from core.history_service import HistoryService
+from app.core.history_service import HistoryService
 
 
 class HistoryPage(TabbedPanelItem):

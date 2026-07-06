@@ -9,12 +9,12 @@ from kivy.uix.spinner import Spinner
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.uix.textinput import TextInput
 
-from core.models import DownloadKind
-from core.queue_service import QueueItem
-from core.settings_service import SettingsService
-from core.youtube_service import YouTubeService
-from ui.mobile.state import mobile_manager
-from utils.validators import is_supported_url
+from app.core.models import DownloadKind
+from app.core.queue_service import QueueItem
+from app.core.settings_service import SettingsService
+from app.core.youtube_service import YouTubeService
+from app.ui.mobile.state import mobile_manager
+from app.utils.validators import is_supported_url
 
 
 class DownloadPage(TabbedPanelItem):

@@ -4,10 +4,10 @@ from pathlib import Path
 from threading import Thread
 from typing import Any
 
-from core.download_service import DownloadService
-from core.models import DownloadOptions, QueueStatus
-from core.queue_service import QueueItem, QueueService
-from core.settings_service import SettingsService
+from app.core.download_service import DownloadService
+from app.core.models import DownloadOptions, QueueStatus
+from app.core.queue_service import QueueItem, QueueService
+from app.core.settings_service import SettingsService
 
 
 class MobileDownloadWorker(Thread):

@@ -3,10 +3,10 @@ from __future__ import annotations
 from kivy.app import App
 from kivy.uix.tabbedpanel import TabbedPanel
 
-from ui.mobile.download import DownloadPage
-from ui.mobile.history import HistoryPage
-from ui.mobile.queue import QueuePage
-from ui.mobile.settings import SettingsPage
+from app.ui.mobile.download import DownloadPage
+from app.ui.mobile.history import HistoryPage
+from app.ui.mobile.queue import QueuePage
+from app.ui.mobile.settings import SettingsPage
 
 
 class YouTubeDownloaderMobileApp(App):
