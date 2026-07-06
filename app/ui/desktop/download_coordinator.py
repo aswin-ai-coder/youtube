@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-
+from app.utils.logger import get_logger
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from app.core.download_service import DownloadWorker
@@ -25,8 +25,11 @@ class DownloadCoordinator(QObject):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.start_available)
         self.timer.start()
+        self.logger = get_logger("download")
+        self.logger.info("DownloadCoordinator initialized")
 
     def add(self, item: QueueItem) -> None:
+        self.logger.info(f"Queueing download: {item.url}")
         self.queue.enqueue(item)
         self.queue_changed.emit()
         self.start_available()
@@ -75,6 +78,7 @@ class DownloadCoordinator(QObject):
             self.queue_changed.emit()
 
     def _start_item(self, item: QueueItem) -> None:
+        self.logger.info(f"Starting download: {item.url}")
         worker = DownloadWorker(options=self._options(item))
         self.workers[item.id] = worker
         worker.progress.connect(
@@ -121,19 +125,56 @@ class DownloadCoordinator(QObject):
 
     def _finished(self, item_id: str, output: str) -> None:
         self.workers.pop(item_id, None)
-        item = self.queue.update(item_id, status=QueueStatus.COMPLETED, progress=100)
+
+        item = self.queue.update(
+            item_id,
+            status=QueueStatus.COMPLETED,
+            progress=100,
+        )
+
+        if item:
+            self.logger.info(
+                f"Download completed: {item.title or item.url}"
+            )
+
         self.completed.emit(item_id, output)
+
         self.queue_changed.emit()
+
         self.start_available()
 
     def _error(self, item_id: str, message: str) -> None:
         self.workers.pop(item_id, None)
+
         item = self.queue.get(item_id)
-        if item and item.status in {QueueStatus.PAUSED, QueueStatus.CANCELLED}:
+
+        if item and item.status in {
+            QueueStatus.PAUSED,
+            QueueStatus.CANCELLED,
+        }:
+            self.logger.warning(
+                f"Download stopped: {item.title or item.url}"
+            )
+
             self.queue_changed.emit()
+
             self.start_available()
+
             return
-        self.queue.update(item_id, status=QueueStatus.FAILED, error=message)
+
+        self.queue.update(
+            item_id,
+            status=QueueStatus.FAILED,
+            error=message,
+        )
+
+        if item:
+            self.logger.error(
+                f"Download failed: {item.title or item.url} | {message}"
+            )
+
         self.failed.emit(item_id, message)
+
         self.queue_changed.emit()
+
         self.start_available()
