@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar
 from PySide6.QtWidgets import QPushButton, QSplitter, QTabWidget, QVBoxLayout, QWidget
-
+from app.utils.error_handler import ErrorHandler
 from app.core.history_service import HistoryService
 from app.core.playlist_service import PlaylistMetadata, PlaylistService
 from app.core.queue_service import QueueService
@@ -194,7 +194,17 @@ class MainWindow(QMainWindow):
             )
             self.statusBar().showMessage("Ready")
         except Exception as exc:
-            QMessageBox.critical(self, "Analysis failed", str(exc))
+            message = ErrorHandler.handle(
+                exc,
+                context="Analyze video",
+            )
+
+            QMessageBox.critical(
+                self,
+                "Analysis failed",
+                message,
+            )
+
             self.statusBar().showMessage("Analysis failed")
 
     def download(self) -> None:
@@ -289,7 +299,16 @@ class MainWindow(QMainWindow):
                 text = f"yt-dlp {status.latest_version} is available."
             QMessageBox.information(self, "Update Check", text)
         except Exception as exc:
-            QMessageBox.warning(self, "Update Check Failed", str(exc))
+            message = ErrorHandler.handle(
+                exc,
+                context="Update check",
+            )
+
+            QMessageBox.warning(
+                self,
+                "Update Check Failed",
+                message,
+            )
 
     def open_download_folder(self) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(self.folder_input.text()))
