@@ -30,6 +30,17 @@ def build_download_widget(window) -> QWidget:
 
     window.type_box = QComboBox()
     window.type_box.addItems(["Video + Audio", "Video", "Audio"])
+    window.preset_box = QComboBox()
+    window.preset_box.addItems(
+        [
+            "Best Video",
+            "1080p MP4",
+            "720p MP4",
+            "MP3 320",
+            "MP3 128",
+            "FLAC",
+        ]
+    )
     window.quality_box = QComboBox()
     window.quality_box.addItems(
         ["Best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "240p", "144p"]
@@ -60,6 +71,9 @@ def build_download_widget(window) -> QWidget:
     window.schedule_enabled = QCheckBox("Schedule")
     window.schedule_time = QDateTimeEdit(QDateTime.currentDateTime())
     window.schedule_time.setCalendarPopup(True)
+    window.schedule_time.setDisplayFormat("yyyy-MM-dd HH:mm")
+    window.schedule_time.setMinimumDateTime(QDateTime.currentDateTime())
+    window.schedule_time.setEnabled(False)
     window.filename_input = QLineEdit(window.settings.get("filename_template"))
     window.filename_input.setPlaceholderText("%(title)s.%(ext)s")
     window.folder_input = QLineEdit(window.settings.get("download_folder"))
@@ -69,6 +83,7 @@ def build_download_widget(window) -> QWidget:
     folder_row.addWidget(window.folder_input, 1)
     folder_row.addWidget(browse_btn)
 
+    form.addRow("Preset", window.preset_box)
     form.addRow("Download type", window.type_box)
     form.addRow("Quality", window.quality_box)
     form.addRow("Audio bitrate", window.audio_bitrate_box)
@@ -110,10 +125,12 @@ def build_download_widget(window) -> QWidget:
         window.translate_subs.setEnabled(window.subtitle_box.currentText() != "None")
         window.translation_lang.setEnabled(window.translate_subs.isChecked())
         window.subtitle_format.setEnabled(window.subtitle_box.currentText() != "None")
+        window.schedule_time.setEnabled(window.schedule_enabled.isChecked())
 
     window.type_box.currentTextChanged.connect(lambda _: _update_fields())
     window.subtitle_box.currentTextChanged.connect(lambda _: _update_fields())
     window.translate_subs.stateChanged.connect(lambda _: _update_fields())
+    window.schedule_enabled.toggled.connect(lambda _: _update_fields())
     _update_fields()
 
     container = QScrollArea()

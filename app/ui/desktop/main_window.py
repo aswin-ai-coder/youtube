@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
         self._load_window_state()
         self._load_history()
         self._apply_theme()
+        self._connect_presets()
         self._start_clipboard_monitor()
 
     def _build_ui(self) -> None:
@@ -140,6 +141,43 @@ class MainWindow(QMainWindow):
         self.history_panel.copy_url_requested.connect(self.copy_history_url)
         self.history_panel.delete_requested.connect(self.delete_history_item)
 
+    def _connect_presets(self) -> None:
+        self.preset_box.currentTextChanged.connect(self._apply_preset)
+
+    def _apply_preset(self, preset: str) -> None:
+        if preset == "Best Video":
+            self.type_box.setCurrentText("Video + Audio")
+            self.quality_box.setCurrentText("Best")
+            self.video_codec_box.setCurrentText("h264")
+            self.container_box.setCurrentText("mp4")
+
+        elif preset == "1080p MP4":
+            self.type_box.setCurrentText("Video + Audio")
+            self.quality_box.setCurrentText("1080p")
+            self.video_codec_box.setCurrentText("h264")
+            self.container_box.setCurrentText("mp4")
+
+        elif preset == "720p MP4":
+            self.type_box.setCurrentText("Video + Audio")
+            self.quality_box.setCurrentText("720p")
+            self.video_codec_box.setCurrentText("h264")
+            self.container_box.setCurrentText("mp4")
+
+        elif preset == "MP3 320":
+            self.type_box.setCurrentText("Audio")
+            self.audio_codec_box.setCurrentText("mp3")
+            self.audio_bitrate_box.setCurrentText("320")
+
+        elif preset == "MP3 128":
+            self.type_box.setCurrentText("Audio")
+            self.audio_codec_box.setCurrentText("mp3")
+            self.audio_bitrate_box.setCurrentText("128")
+
+        elif preset == "FLAC":
+            self.type_box.setCurrentText("Audio")
+            self.audio_codec_box.setCurrentText("flac")
+            self.audio_bitrate_box.setCurrentText("320")
+
     def analyze(self) -> None:
         url = self.url_input.text().strip()
         if not is_supported_url(url):
@@ -182,8 +220,13 @@ class MainWindow(QMainWindow):
                 pixmap := download_thumbnail(metadata.thumbnail)
             ):
                 self.video_panel.set_thumbnail(pixmap)
+            current_quality = self.quality_box.currentText()
             self.quality_box.clear()
             self.quality_box.addItems(["Best", *metadata.qualities])
+            index = self.quality_box.findText(current_quality)
+            if index >= 0:
+                self.quality_box.setCurrentIndex(index)
+
             self.subtitle_box.clear()
             self.subtitle_box.addItem("None")
             self.subtitle_box.addItems([track.language for track in metadata.subtitles])
