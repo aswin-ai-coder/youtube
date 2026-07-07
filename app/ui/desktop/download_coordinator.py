@@ -178,3 +178,20 @@ class DownloadCoordinator(QObject):
         self.queue_changed.emit()
 
         self.start_available()
+
+    def shutdown(self) -> None:
+        """
+        Stop all active download workers before the application exits.
+        """
+
+        self.logger.info("Stopping active download workers...")
+
+        self.timer.stop()
+
+        for worker in list(self.workers.values()):
+            worker.stop()
+            worker.wait()
+
+        self.workers.clear()
+
+        self.logger.info("All download workers stopped.")

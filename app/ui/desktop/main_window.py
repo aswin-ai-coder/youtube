@@ -318,11 +318,20 @@ class MainWindow(QMainWindow):
             event.acceptProposedAction()
 
     def closeEvent(self, event) -> None:
+        self.coordinator.shutdown()
+
         self.settings.set(
-            "window_geometry", bytes(self.saveGeometry().toBase64()).decode()
+            "window_geometry",
+            bytes(self.saveGeometry().toBase64()).decode(),
         )
-        self.settings.set("splitter_sizes", self.main_splitter.sizes())
+
+        self.settings.set(
+            "splitter_sizes",
+            self.main_splitter.sizes(),
+        )
+
         self.settings.save()
+
         super().closeEvent(event)
 
     def _start_clipboard_monitor(self) -> None:

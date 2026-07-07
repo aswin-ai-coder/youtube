@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 from uuid import uuid4
 
 from app.core.models import DownloadKind, QueueStatus
+from app.utils.logger import get_logger
 
 
 @dataclass(slots=True)
@@ -52,8 +54,94 @@ class QueueService:
     def __init__(self) -> None:
         self._queue: deque[QueueItem] = deque()
 
+        self.logger = get_logger("queue")
+
+        self._data_dir = Path.home() / ".local" / "share" / "youtube-downloader"
+
+        self._data_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        self._queue_file = self._data_dir / "queue.json"
+        self.load_queue()
+
+    def save_queue(self) -> None:
+        """
+        Save queue to disk.
+        """
+
+        items = []
+
+        for item in self._queue:
+
+            # Don't persist completed downloads.
+            # They are already stored in History.
+            if item.status == QueueStatus.COMPLETED:
+                continue
+
+            data = asdict(item)
+
+            data["status"] = item.status.value
+            data["kind"] = item.kind.value
+
+            if item.scheduled_at:
+                data["scheduled_at"] = item.scheduled_at.isoformat()
+
+            items.append(data)
+
+        try:
+            with self._queue_file.open(
+                "w",
+                encoding="utf-8",
+            ) as fp:
+                json.dump(
+                    items,
+                    fp,
+                    indent=4,
+                    ensure_ascii=False,
+                )
+
+        except Exception as exc:
+            self.logger.error(f"Failed to save queue: {exc}")
+
+    def load_queue(self) -> None:
+        """
+        Restore queue from disk.
+        """
+
+        if not self._queue_file.exists():
+            return
+
+        try:
+            with self._queue_file.open(
+                "r",
+                encoding="utf-8",
+            ) as fp:
+                items = json.load(fp)
+
+            self._queue.clear()
+
+            for data in items:
+
+                if data.get("scheduled_at"):
+                    data["scheduled_at"] = datetime.fromisoformat(data["scheduled_at"])
+
+                data["status"] = QueueStatus(data["status"])
+                data["kind"] = DownloadKind(data["kind"])
+
+                item = QueueItem(**data)
+
+                if item.status == QueueStatus.RUNNING:
+                    item.status = QueueStatus.QUEUED
+
+                self._queue.append(item)
+        except Exception as exc:
+            self.logger.error(f"Failed to load queue: {exc}")
+
     def enqueue(self, item: QueueItem) -> QueueItem:
         self._queue.append(item)
+        self.save_queue()
         return item
 
     def extend(self, items: Iterable[QueueItem]) -> None:
@@ -68,6 +156,7 @@ class QueueService:
                     item.status = QueueStatus.QUEUED
             if item.status == QueueStatus.QUEUED:
                 item.status = QueueStatus.RUNNING
+                self.save_queue()
                 return item
         return None
 
@@ -91,6 +180,7 @@ class QueueService:
             item.error = error
         if title is not None:
             item.title = title
+        self.save_queue()
         return item
 
     def retry(self, item_id: str) -> bool:
@@ -100,6 +190,9 @@ class QueueService:
         item.status = QueueStatus.QUEUED
         item.progress = 0
         item.error = None
+
+        self.save_queue()
+
         return True
 
     def due_count(self) -> int:
@@ -119,6 +212,7 @@ class QueueService:
         for index, item in enumerate(self._queue):
             if item.id == item_id:
                 del self._queue[index]
+                self.save_queue()
                 return True
         return False
 
@@ -130,6 +224,7 @@ class QueueService:
         new_index = max(0, min(len(items) - 1, index + offset))
         items.insert(new_index, items.pop(index))
         self._queue = deque(items)
+        self.save_queue()
         return True
 
     def get(self, item_id: str) -> QueueItem | None:
@@ -140,3 +235,4 @@ class QueueService:
 
     def clear(self) -> None:
         self._queue.clear()
+        self.save_queue()
