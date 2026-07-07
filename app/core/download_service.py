@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QThread, Signal
-from yt_dlp import YoutubeDL
-
+from app.core.ytdlp_factory import create_ytdlp
 from app.core.models import DownloadKind, DownloadOptions
+from app.utils.error_handler import ErrorHandler
 
 
 class DownloadService:
@@ -87,7 +87,7 @@ class DownloadService:
             raise FileExistsError(
                 f"Output already exists for template {options.filename_template}."
             )
-        with YoutubeDL(self.build_options(options, progress_hook)) as ydl:
+        with create_ytdlp(self.build_options(options, progress_hook)) as ydl:
             ydl.download([options.url])
 
     def _output_exists(self, options: DownloadOptions) -> bool:
@@ -186,9 +186,14 @@ class DownloadWorker(QThread):
             self.progress.emit(100)
             self.status.emit("Finished")
             output_path = self.output_file or str(self.options.output_dir)
-            self.finished.emit(str(output_path))
-        except Exception as exc:  # pragma: no cover - worker error path
-            self.error.emit(str(exc))
+            self.finished.emit(output_path)
+        except Exception as exc:
+            message = ErrorHandler.handle(
+                exc,
+                context="DownloadWorker",
+            )
+
+            self.error.emit(message)
 
     def stop(self) -> None:
         self.cancelled = True
