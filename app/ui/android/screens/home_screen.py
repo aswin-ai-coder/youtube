@@ -1,12 +1,13 @@
 from threading import Thread
-
+from kivy.app import App
 from kivy.clock import Clock
 from kivy.metrics import dp
-
+from app.core.playlist_service import PlaylistService
+from app.ui.android.widgets.playlist_dialog import PlaylistDialog
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.scrollview import MDScrollView
-
+from datetime import datetime
 from app.core.youtube_service import YouTubeService
 from app.core.queue_service import QueueService
 from app.core.settings_service import SettingsService
@@ -28,7 +29,7 @@ class HomeScreen(MDScreen):
         super().__init__(**kwargs)
 
         self.youtube = YouTubeService()
-
+        self.playlists = PlaylistService()
         self.settings = SettingsService()
 
         self.queue = QueueService()
@@ -117,6 +118,14 @@ class HomeScreen(MDScreen):
 
         try:
 
+            playlist = self.playlists.get_playlist_info(url)
+
+            if playlist.is_playlist:
+
+                Clock.schedule_once(
+                    lambda dt: self.show_playlist(playlist)
+                )
+
             metadata = self.youtube.get_video_info(url)
 
             self.metadata = metadata
@@ -135,6 +144,45 @@ class HomeScreen(MDScreen):
 
             Clock.schedule_once(
                 lambda dt: self.url_bar.set_loading(False)
+            )
+
+    def show_playlist(self, playlist):
+
+        dialog = PlaylistDialog(
+            playlist.entries,
+            self.playlist_selected,
+        )
+
+        dialog.open()
+
+
+    def playlist_selected(self, videos):
+
+        app = App.get_running_app()
+
+        queue = app.sm.get_screen("queue")
+
+        for video in videos:
+
+            item = self.factory.build(
+                url=video["url"],
+                title=video["title"],
+                playlist=PlaylistMetadata(),
+            )
+
+            if item is None:
+                continue
+
+            self.coordinator.add(item)
+
+            queue.add_download(
+                item.id,
+                item.title,
+                {
+                    "pause": self.coordinator.pause,
+                    "resume": self.coordinator.resume,
+                    "cancel": self.coordinator.cancel,
+                },
             )
 
     def update_ui(self, metadata):
@@ -169,29 +217,74 @@ class HomeScreen(MDScreen):
             return
 
         self.coordinator.add(item)
+        app = App.get_running_app()
+        queue_screen = app.sm.get_screen("queue")
+
+        self.queue_card = queue_screen.add_download(
+            item.id,
+            item.title,
+            {
+                "pause": self.coordinator.pause,
+                "resume": self.coordinator.resume,
+                "cancel": self.coordinator.cancel,
+            },
+        )
 
     # ---------------- Progress ----------------
 
     def update_progress(self, value):
 
         Clock.schedule_once(
-            lambda dt: self.download_panel.set_progress(value)
+            lambda dt: (
+                self.download_panel.set_progress(value),
+                self.queue_card.update_progress(value),
+            )
         )
 
     def update_status(self, text):
-
         Clock.schedule_once(
-            lambda dt: self.download_panel.set_status(text)
+            lambda dt: (
+                self.download_panel.set_status(text),
+                self.queue_card.update_status(text),
+            )
         )
 
     def download_completed(self, *args):
 
+        app = App.get_running_app()
+
+        history = app.sm.get_screen("history")
+
+        history.add_history(
+
+            "{}   ({})".format(
+
+                self.metadata.title,
+
+                datetime.now().strftime("%d-%m-%Y %H:%M"),
+
+            )
+
+        )
+
         Clock.schedule_once(
-            lambda dt: self.download_panel.finish()
+
+            lambda dt: (
+
+                self.download_panel.finish(),
+
+                self.queue_card.update_progress(100),
+
+                self.queue_card.update_status("Completed"),
+
+            )
+
         )
 
     def download_failed(self, *args):
-
         Clock.schedule_once(
-            lambda dt: self.download_panel.error()
+            lambda dt: (
+                self.download_panel.error(),
+                self.queue_card.update_status("Failed"),
+            )
         )
