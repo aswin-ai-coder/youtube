@@ -38,8 +38,14 @@ class PlaylistService:
                     {
                         "index": index,
                         "title": entry.get("title") or f"Video {index}",
-                        "url": entry.get("url") or entry.get("id"),
+                        "url": (
+                            entry.get("webpage_url")
+                            or entry.get("url")
+                            or f"https://www.youtube.com/watch?v={entry.get('id')}"
+                        ),
                         "id": entry.get("id"),
+                        "duration": entry.get("duration"),
+                        "thumbnail": entry.get("thumbnail"),
                     }
                     for index, entry in enumerate(entries, start=1)
                     if isinstance(entry, dict)

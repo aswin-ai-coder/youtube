@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from yt_dlp import YoutubeDL
+from app.core.ytdlp_factory import create_ytdlp
 
 from app.core.models import MediaFormat, SubtitleTrack, VideoMetadata
 
@@ -17,7 +17,8 @@ class YouTubeService:
             "no_warnings": True,
             "extract_flat": False,
         }
-        with YoutubeDL(opts) as ydl:
+
+        with create_ytdlp(opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
         if not isinstance(info, dict):

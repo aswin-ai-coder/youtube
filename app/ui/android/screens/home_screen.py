@@ -12,7 +12,7 @@ from app.core.youtube_service import YouTubeService
 from app.core.queue_service import QueueService
 from app.core.settings_service import SettingsService
 from app.core.playlist_service import PlaylistMetadata
-
+from app.core.notification_service import NotificationService
 from app.ui.desktop.download_coordinator import DownloadCoordinator
 from app.ui.desktop.queue_item_factory import QueueItemFactory
 
@@ -31,7 +31,7 @@ class HomeScreen(MDScreen):
         self.youtube = YouTubeService()
         self.playlists = PlaylistService()
         self.settings = SettingsService()
-
+        self.notifications = NotificationService()
         self.queue = QueueService()
 
         self.coordinator = DownloadCoordinator(
@@ -203,9 +203,13 @@ class HomeScreen(MDScreen):
         self.url_bar.url_input.helper_text = ""
 
     def download(self, *args):
-
         if self.metadata is None:
             return
+
+        self.notifications.show(
+            "YouTube Downloader",
+            "Download started",
+        )
 
         item = self.factory.build(
             self.url_bar.url_input.text.strip(),
@@ -217,10 +221,12 @@ class HomeScreen(MDScreen):
             return
 
         self.coordinator.add(item)
-        app = App.get_running_app()
-        queue_screen = app.sm.get_screen("queue")
 
-        self.queue_card = queue_screen.add_download(
+        app = App.get_running_app()
+
+        queue = app.sm.get_screen("queue")
+
+        self.queue_card = queue.add_download(
             item.id,
             item.title,
             {
@@ -251,37 +257,32 @@ class HomeScreen(MDScreen):
 
     def download_completed(self, *args):
 
+        self.notifications.show(
+            "Download Complete",
+            self.metadata.title,
+        )
+
         app = App.get_running_app()
 
         history = app.sm.get_screen("history")
 
-        history.add_history(
-
-            "{}   ({})".format(
-
-                self.metadata.title,
-
-                datetime.now().strftime("%d-%m-%Y %H:%M"),
-
-            )
-
-        )
+        history.add_history(self.metadata.title)
 
         Clock.schedule_once(
-
             lambda dt: (
-
                 self.download_panel.finish(),
-
                 self.queue_card.update_progress(100),
-
                 self.queue_card.update_status("Completed"),
-
             )
-
         )
 
     def download_failed(self, *args):
+
+        self.notifications.show(
+            "Download Failed",
+            self.metadata.title,
+        )
+
         Clock.schedule_once(
             lambda dt: (
                 self.download_panel.error(),

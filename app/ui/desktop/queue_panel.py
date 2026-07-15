@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QListWidget, QPushButton
 from PySide6.QtWidgets import QVBoxLayout
@@ -44,14 +43,18 @@ class QueuePanel(QFrame):
             title = item.title or item.url
             details = [
                 title,
-                item.kind.value,
-                f"{item.status.value}",
-                f"{item.progress}%",
+                item.kind.value.replace("_", " ").title(),
+                f"Status: {item.status.value.title()}",
+                f"Progress: {item.progress}%",
             ]
+            if item.scheduled_at:
+                details.append(
+                    f"Starts: {item.scheduled_at.strftime('%Y-%m-%d %H:%M')}"
+                )
             if item.subtitle_languages:
                 details.append(f"Subs: {','.join(item.subtitle_languages)}")
             if item.playlist:
-                details.append("Playlist")
+                details.append("Playlist Download")
             self.queue_list.addItem(" | ".join(details))
 
     def selected_id(self) -> str | None:
