@@ -30,7 +30,11 @@ jobs:
       - name: Install test system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev pkg-config
+          sudo apt-get install -y \
+            libcairo2-dev pkg-config \
+            libmtdev-dev \
+            xvfb \
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
 
       - name: Install test dependencies
         run: |
@@ -43,12 +47,15 @@ jobs:
       - name: Smoke-test Android UI imports
         env:
           KIVY_NO_ARGS: "1"
-        run: python -c "from app.ui.android.app import YouTubeDownloaderApp; print('Android UI imports OK:', YouTubeDownloaderApp.__name__)"
+          KIVY_NO_CONSOLELOG: "1"
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
+            python -c "from app.ui.android.app import YouTubeDownloaderApp; print('Android UI imports OK:', YouTubeDownloaderApp.__name__)"
 
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python -m pytest -q
 
   desktop-build:
     runs-on: ubuntu-24.04
