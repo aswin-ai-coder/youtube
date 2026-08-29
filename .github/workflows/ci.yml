@@ -48,22 +48,7 @@ jobs:
           KIVY_NO_ARGS: "1"
           KIVY_NO_CONSOLELOG: "1"
         run: |
-          python - <<'PY'
-          import importlib
-          import sys
-          import traceback
-
-          packages = ("kivy", "kivymd", "cairo", "asyncgui", "asynckivy", "pytest")
-          for name in packages:
-              try:
-                  module = importlib.import_module(name)
-                  print(f"{name}: {getattr(module, '__version__', 'installed')}")
-              except BaseException:
-                  print(f"ERROR: Failed to import {name}", file=sys.stderr)
-                  traceback.print_exc()
-                  raise
-          print("Python:", sys.version)
-          PY
+          python -c 'import importlib, sys, traceback; packages=("kivy","kivymd","cairo","asyncgui","asynckivy","pytest"); [(print(f"{name}: {getattr((module:=importlib.import_module(name)), "__version__", "installed")}")) if True else None for name in packages]'
 
       - name: Compile Python sources
         run: python -m compileall -q app main.py service
@@ -75,20 +60,9 @@ jobs:
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
         run: |
+          set -o pipefail
           xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
-            python - <<'PY'
-          import sys
-          import traceback
-
-          print("Python:", sys.version)
-          try:
-              from app.ui.android.app import YouTubeDownloaderApp
-              print("Android UI imports OK:", YouTubeDownloaderApp.__name__)
-          except BaseException as exc:
-              print(f"ERROR: Android UI import failed: {exc!r}", file=sys.stderr)
-              traceback.print_exc()
-              raise
-          PY
+            python -c 'import sys, traceback; print("Python:", sys.version); print("Importing Android UI..."); from app.ui.android.app import YouTubeDownloaderApp; print("Android UI imports OK:", YouTubeDownloaderApp.__name__)'
 
       - name: Run tests
         env:
