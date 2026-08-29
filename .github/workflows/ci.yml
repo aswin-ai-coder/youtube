@@ -46,29 +46,92 @@ jobs:
       - name: Verify test dependencies
         env:
           KIVY_NO_ARGS: "1"
-          KIVY_NO_CONSOLELOG: "1"
+          KIVY_NO_CONSOLELOG: "0"
         run: |
-          python -c 'import importlib, sys, traceback; packages=("kivy","kivymd","cairo","asyncgui","asynckivy","pytest"); [(print(f"{name}: {getattr((module:=importlib.import_module(name)), "__version__", "installed")}")) if True else None for name in packages]'
+          python - <<'PY'
+          import importlib
+          import sys
+          import traceback
+
+          packages = ("kivy", "kivymd", "cairo", "asyncgui", "asynckivy", "pytest")
+          for name in packages:
+              try:
+                  module = importlib.import_module(name)
+                  print(f"{name}: {getattr(module, '__version__', 'installed')}")
+              except BaseException:
+                  print(f"ERROR: Failed to import {name}", file=sys.stderr)
+                  traceback.print_exc()
+                  raise
+          print("Python:", sys.version)
+          PY
 
       - name: Compile Python sources
         run: python -m compileall -q app main.py service
 
-      - name: Smoke-test Android UI imports
+      - name: Android module import preflight
         env:
           KIVY_NO_ARGS: "1"
-          KIVY_NO_CONSOLELOG: "1"
+          KIVY_NO_CONSOLELOG: "0"
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
+          KIVY_LOG_LEVEL: "2"
         run: |
-          set -o pipefail
+          set -euxo pipefail
+          export PYTHONUNBUFFERED=1
           xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
-            python -c 'import sys, traceback; print("Python:", sys.version); print("Importing Android UI..."); from app.ui.android.app import YouTubeDownloaderApp; print("Android UI imports OK:", YouTubeDownloaderApp.__name__)'
+            python -u - <<'PY'
+          import importlib
+          import sys
+          import traceback
+
+          modules = [
+              "app.ui.android.widgets.bottom_nav",
+              "app.ui.android.widgets.url_bar",
+              "app.ui.android.widgets.video_card",
+              "app.ui.android.widgets.download_panel",
+              "app.ui.android.widgets.playlist_item",
+              "app.ui.android.widgets.playlist_dialog",
+              "app.ui.android.widgets.playlist_progress",
+              "app.ui.android.widgets.queue_item",
+              "app.ui.android.screens.history_screen",
+              "app.ui.android.screens.queue_screen",
+              "app.ui.android.screens.favorites_screen",
+              "app.ui.android.screens.settings_screen",
+              "app.ui.android.screens.home_screen",
+              "app.ui.android.app",
+          ]
+
+          print("Python:", sys.version, flush=True)
+          for name in modules:
+              print(f"\n=== IMPORT {name} ===", flush=True)
+              try:
+                  module = importlib.import_module(name)
+                  print(f"OK: {name} -> {module.__file__}", flush=True)
+              except BaseException as exc:
+                  print(f"FAILED: {name}: {exc!r}", file=sys.stderr, flush=True)
+                  traceback.print_exc()
+                  raise
+          print("\nALL ANDROID MODULE IMPORTS OK", flush=True)
+          PY
+
+      - name: Smoke-test Android UI import
+        env:
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "0"
+          KIVY_WINDOW: "sdl2"
+          KIVY_GL_BACKEND: "sdl2"
+          KIVY_LOG_LEVEL: "2"
+        run: |
+          set -euxo pipefail
+          export PYTHONUNBUFFERED=1
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
+            python -u -c 'from app.ui.android.app import YouTubeDownloaderApp; print("Android UI imports OK:", YouTubeDownloaderApp.__name__, flush=True)'
 
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
           KIVY_NO_ARGS: "1"
-          KIVY_NO_CONSOLELOG: "1"
+          KIVY_NO_CONSOLELOG: "0"
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
         run: |
