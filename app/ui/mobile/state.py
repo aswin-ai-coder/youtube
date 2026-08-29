@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from threading import Lock, Thread
-from typing import Any, Callable
+from typing import Any
 
 from app.core.download_engine import DownloadEngine
 from app.core.history_service import HistoryService
@@ -31,26 +31,16 @@ class MobileDownloadWorker(Thread):
                 QueueStatus.CANCELLED,
             }:
                 raise RuntimeError("Download stopped")
-            status = data.get("status")
-            if status == "downloading":
+            if data.get("status") == "downloading":
                 downloaded = int(data.get("downloaded_bytes") or 0)
                 total = int(data.get("total_bytes") or data.get("total_bytes_estimate") or 0)
                 progress = int(downloaded * 100 / total) if total else 0
-                self.manager.queue.update(
-                    self.item.id,
-                    status=QueueStatus.RUNNING,
-                    progress=progress,
-                )
+                self.manager.queue.update(self.item.id, status=QueueStatus.RUNNING, progress=progress)
 
         try:
             self.manager.queue.update(self.item.id, status=QueueStatus.RUNNING, error="")
             result = self.manager.engine.download(self.manager._options(self.item), hook)
-            self.manager.queue.update(
-                self.item.id,
-                status=QueueStatus.COMPLETED,
-                progress=100,
-                error="",
-            )
+            self.manager.queue.update(self.item.id, status=QueueStatus.COMPLETED, progress=100, error="")
             self.manager.history.add_record(
                 title=self.item.title or self.item.url,
                 url=self.item.url,
@@ -89,9 +79,8 @@ class MobileDownloadWorker(Thread):
 class MobileDownloadManager:
     """Shared mobile queue facade.
 
-    On Android, Buildozer's background service owns actual downloads. When the
-    UI is run outside Android, local threads are used so the mobile UI remains
-    usable for development and testing.
+    On Android, Buildozer's service owns downloads. Outside Android, local
+    worker threads are used so the mobile UI remains useful for development.
     """
 
     def __init__(self) -> None:
@@ -124,8 +113,7 @@ class MobileDownloadManager:
             active += 1
 
     def pause(self, item_id: str) -> None:
-        item = self.queue.get(item_id)
-        if not item:
+        if not self.queue.get(item_id):
             return
         self.queue.update(item_id, status=QueueStatus.PAUSED)
         if worker := self.workers.get(item_id):
@@ -136,8 +124,7 @@ class MobileDownloadManager:
             self.start_available()
 
     def cancel(self, item_id: str) -> None:
-        item = self.queue.get(item_id)
-        if not item:
+        if not self.queue.get(item_id):
             return
         self.queue.update(item_id, status=QueueStatus.CANCELLED)
         if worker := self.workers.get(item_id):
@@ -187,7 +174,7 @@ class MobileDownloadManager:
         try:
             from app.core.notification_service import NotificationService
 
-            NotificationService().notify(title, message)
+            NotificationService.show(title, message)
         except Exception:
             pass
 
