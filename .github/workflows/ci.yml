@@ -34,12 +34,30 @@ jobs:
             libcairo2-dev pkg-config \
             libmtdev-dev \
             xvfb \
-            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev \
+            mesa-utils
 
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+
+      - name: Verify test dependencies
+        env:
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "1"
+        run: |
+          python - <<'PY'
+          import importlib
+          import sys
+
+          packages = ("kivy", "kivymd", "pycairo", "asyncgui", "asynckivy", "pytest")
+          for name in packages:
+              module = importlib.import_module(name)
+              print(f"{name}: {getattr(module, '__version__', 'installed')}")
+          print("Python:", sys.version)
+          PY
 
       - name: Compile Python sources
         run: python -m compileall -q app main.py service
@@ -48,6 +66,8 @@ jobs:
         env:
           KIVY_NO_ARGS: "1"
           KIVY_NO_CONSOLELOG: "1"
+          KIVY_WINDOW: "sdl2"
+          KIVY_GL_BACKEND: "sdl2"
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
             python -c "from app.ui.android.app import YouTubeDownloaderApp; print('Android UI imports OK:', YouTubeDownloaderApp.__name__)"
@@ -55,7 +75,13 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python -m pytest -q
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "1"
+          KIVY_WINDOW: "sdl2"
+          KIVY_GL_BACKEND: "sdl2"
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
+            python -m pytest -q
 
   desktop-build:
     runs-on: ubuntu-24.04
@@ -108,7 +134,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential git zip unzip \
+            build-essential git zip unzip curl \
             openjdk-17-jdk \
             autoconf automake libtool libtool-bin libltdl-dev m4 \
             pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
@@ -136,13 +162,13 @@ jobs:
 
       - name: Install Android SDK packages and accept licenses
         run: |
-          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
-          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
             "build-tools;35.0.1" \
-            "platforms;android-35" \
-            "cmdline-tools;latest"
-          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
+            "platforms;android-35"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
 
       - name: Configure Buildozer to use prepared Android SDK
         run: |
