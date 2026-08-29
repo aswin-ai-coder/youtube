@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""Background downloader service entrypoint for python-for-android."""
 
 import time
 from concurrent.futures import ThreadPoolExecutor
