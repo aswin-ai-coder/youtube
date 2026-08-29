@@ -1,92 +1,53 @@
-# Android Build Plan
+# Android Build
 
-This project includes a working Android packaging manifest at `buildozer.spec`.
-The mobile UI lives in `app/ui/mobile`, and shared backend services live in
-`app/core`.
+The Android frontend is `app/ui/android` and uses the same yt-dlp/download engine as desktop without importing PySide6.
 
-## Run on Android device or emulator
-
-1. Activate the project environment:
+## Prerequisites
 
 ```bash
 cd ~/Projects/youtube
 source youtub/bin/activate
-```
-
-2. Install Python requirements and Buildozer:
-
-```bash
 pip install -r requirements.txt
-pip install buildozer
 ```
 
-3. Build and install a debug APK:
+Install Android SDK/NDK and Buildozer according to the Buildozer documentation for your Linux distribution.
 
-```bash
-buildozer android debug deploy run
-```
-
-4. If you need only the APK without installing:
-
-```bash
-buildozer android debug
-```
-
-5. Produce a release APK once testing is complete:
-
-```bash
-buildozer android release
-buildozer android apk
-```
-
-6. The generated APK is located in:
-
-```bash
-.buildozer/android/platform/build/dists/youtubedownloader/bin/
-```
-
-## Entry point and packaging
-
-The Android entrypoint is `app/mobile_main.py`, which starts `YouTubeDownloaderMobileApp`.
-The Buildozer manifest includes the application source and excludes the local
-Python virtualenv and build artifacts.
-
-Ensure `buildozer.spec` contains:
-
-- `android.entrypoint = app/mobile_main.py`
-- `source.dir = .`
-- `source.include_exts = py,png,jpg,jpeg,kv,json,txt,md`
-- `source.exclude_dirs = youtub,build,dist,.buildozer,__pycache__`
-
-## Permissions
-
-This app requires:
-
-- `INTERNET`
-- `READ_EXTERNAL_STORAGE`
-- `WRITE_EXTERNAL_STORAGE`
-- `POST_NOTIFICATIONS`
-
-## Notes
-
-- The mobile UI shares download logic with the desktop app using `app/core/DownloadService`.
-- `SettingsService` stores Android download folder configuration and can be updated from
-  `app/ui/mobile/settings.py`.
-- FFmpeg must be available on the device or via a compatible Android binary if the app
-  downloads formats that require FFmpeg post-processing.
-
-## Validation
-
-Before building Android, validate the shared backend on desktop:
-
-```bash
-python -m compileall app
-python -m pytest -q tests/test_core_services.py
-```
-
-If Android build fails, run:
+## Build a debug APK
 
 ```bash
 buildozer android clean
-buildozer android debug deploy run
+buildozer android debug
 ```
+
+Install the generated APK on a connected device with your preferred Android tooling.
+
+## Run from the project root
+
+`main.py` is the Android/Kivy entrypoint. The desktop application remains available through:
+
+```bash
+python -m app.main
+```
+
+## Architecture
+
+- `app/ui/android/app.py` — KivyMD application shell.
+- `app/ui/android/screens/home_screen.py` — analysis and download UI.
+- `app/core/android_download_coordinator.py` — Kivy-safe background download coordination.
+- `app/core/download_engine.py` — UI-independent yt-dlp engine shared with desktop.
+- `app/core/queue_service.py` — persistent queue with recovery and thread-safe writes.
+
+## FFmpeg
+
+Video-only downloads that require no post-processing can work with yt-dlp alone. Audio conversion, subtitle embedding, metadata processing, and thumbnail embedding require an FFmpeg binary available to the target platform. Android packaging therefore needs an Android-compatible FFmpeg integration before those post-processing features can be considered release-ready.
+
+## Validation
+
+Before packaging:
+
+```bash
+python -m compileall app
+python -m pytest -q
+```
+
+The Android UI should be tested on a real device because Android storage, notifications, background execution, and FFmpeg behavior cannot be fully validated by desktop Python tests.

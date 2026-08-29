@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections import deque
-import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+import json
 from pathlib import Path
-from typing import Iterable
+from threading import RLock
 from uuid import uuid4
+from typing import Iterable
 
 from app.core.models import DownloadKind, QueueStatus
 from app.utils.logger import get_logger
@@ -49,98 +50,73 @@ class QueueItem:
 
 
 class QueueService:
-    """In-memory queue with stable ids and status updates."""
+    """Persistent, thread-safe download queue."""
 
     def __init__(self) -> None:
         self._queue: deque[QueueItem] = deque()
-
+        self._lock = RLock()
         self.logger = get_logger("queue")
-
         self._data_dir = Path.home() / ".local" / "share" / "youtube-downloader"
-
-        self._data_dir.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
+        self._data_dir.mkdir(parents=True, exist_ok=True)
         self._queue_file = self._data_dir / "queue.json"
         self.load_queue()
 
     def save_queue(self) -> None:
-        """
-        Save queue to disk.
-        """
-
-        items = []
-
-        for item in self._queue:
-
-            # Don't persist completed downloads.
-            # They are already stored in History.
-            if item.status == QueueStatus.COMPLETED:
-                continue
-
-            data = asdict(item)
-
-            data["status"] = item.status.value
-            data["kind"] = item.kind.value
-
-            if item.scheduled_at:
-                data["scheduled_at"] = item.scheduled_at.isoformat()
-
-            items.append(data)
-
-        try:
-            with self._queue_file.open(
-                "w",
-                encoding="utf-8",
-            ) as fp:
-                json.dump(
-                    items,
-                    fp,
-                    indent=4,
-                    ensure_ascii=False,
-                )
-
-        except Exception as exc:
-            self.logger.error(f"Failed to save queue: {exc}")
+        with self._lock:
+            items = []
+            for item in self._queue:
+                if item.status == QueueStatus.COMPLETED:
+                    continue
+                data = asdict(item)
+                data["status"] = item.status.value
+                data["kind"] = item.kind.value
+                if item.scheduled_at:
+                    data["scheduled_at"] = item.scheduled_at.isoformat()
+                items.append(data)
+            temp = self._queue_file.with_suffix(".json.tmp")
+            try:
+                temp.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+                temp.replace(self._queue_file)
+            except Exception as exc:
+                self.logger.error(f"Failed to save queue: {exc}")
+                try:
+                    temp.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def load_queue(self) -> None:
-        """
-        Restore queue from disk.
-        """
-
-        if not self._queue_file.exists():
-            return
-
-        try:
-            with self._queue_file.open(
-                "r",
-                encoding="utf-8",
-            ) as fp:
-                items = json.load(fp)
-
-            self._queue.clear()
-
-            for data in items:
-
-                if data.get("scheduled_at"):
-                    data["scheduled_at"] = datetime.fromisoformat(data["scheduled_at"])
-
-                data["status"] = QueueStatus(data["status"])
-                data["kind"] = DownloadKind(data["kind"])
-
-                item = QueueItem(**data)
-
-                if item.status == QueueStatus.RUNNING:
-                    item.status = QueueStatus.QUEUED
-
-                self._queue.append(item)
-        except Exception as exc:
-            self.logger.error(f"Failed to load queue: {exc}")
+        with self._lock:
+            if not self._queue_file.exists():
+                return
+            try:
+                data = json.loads(self._queue_file.read_text(encoding="utf-8"))
+                if not isinstance(data, list):
+                    raise ValueError("queue.json must contain a list")
+                restored: deque[QueueItem] = deque()
+                for raw in data:
+                    if not isinstance(raw, dict):
+                        continue
+                    if raw.get("scheduled_at"):
+                        raw["scheduled_at"] = datetime.fromisoformat(raw["scheduled_at"])
+                    raw["status"] = QueueStatus(raw.get("status", QueueStatus.QUEUED.value))
+                    raw["kind"] = DownloadKind(raw.get("kind", DownloadKind.VIDEO_AUDIO.value))
+                    item = QueueItem(**raw)
+                    if item.status == QueueStatus.RUNNING:
+                        item.status = QueueStatus.QUEUED
+                    restored.append(item)
+                self._queue = restored
+            except Exception as exc:
+                self.logger.error(f"Failed to load queue: {exc}")
+                corrupt = self._queue_file.with_suffix(".json.corrupt")
+                try:
+                    self._queue_file.replace(corrupt)
+                except OSError:
+                    pass
+                self._queue.clear()
 
     def enqueue(self, item: QueueItem) -> QueueItem:
-        self._queue.append(item)
+        with self._lock:
+            self._queue.append(item)
         self.save_queue()
         return item
 
@@ -150,80 +126,66 @@ class QueueService:
 
     def dequeue(self) -> QueueItem | None:
         now = datetime.now()
-        for item in self._queue:
-            if item.status == QueueStatus.SCHEDULED and item.scheduled_at:
-                if item.scheduled_at <= now:
+        with self._lock:
+            for item in self._queue:
+                if item.status == QueueStatus.SCHEDULED and item.scheduled_at and item.scheduled_at <= now:
                     item.status = QueueStatus.QUEUED
-            if item.status == QueueStatus.QUEUED:
-                item.status = QueueStatus.RUNNING
-                self.save_queue()
-                return item
-        return None
+                if item.status == QueueStatus.QUEUED:
+                    item.status = QueueStatus.RUNNING
+                    break
+            else:
+                return None
+        self.save_queue()
+        return item
 
-    def update(
-        self,
-        item_id: str,
-        *,
-        status: QueueStatus | None = None,
-        progress: int | None = None,
-        error: str | None = None,
-        title: str | None = None,
-    ) -> QueueItem | None:
-        item = self.get(item_id)
-        if not item:
-            return None
-        if status is not None:
-            item.status = status
-        if progress is not None:
-            item.progress = max(0, min(progress, 100))
-        if error is not None:
-            item.error = error
-        if title is not None:
-            item.title = title
+    def update(self, item_id: str, *, status: QueueStatus | None = None, progress: int | None = None, error: str | None = None, title: str | None = None) -> QueueItem | None:
+        with self._lock:
+            item = self.get(item_id)
+            if not item:
+                return None
+            if status is not None:
+                item.status = status
+            if progress is not None:
+                item.progress = max(0, min(progress, 100))
+            if error is not None:
+                item.error = error
+            if title is not None:
+                item.title = title
         self.save_queue()
         return item
 
     def retry(self, item_id: str) -> bool:
-        item = self.get(item_id)
-        if not item or item.status not in {QueueStatus.FAILED, QueueStatus.CANCELLED}:
-            return False
-        item.status = QueueStatus.QUEUED
-        item.progress = 0
-        item.error = None
-
+        with self._lock:
+            item = self.get(item_id)
+            if not item or item.status not in {QueueStatus.FAILED, QueueStatus.CANCELLED, QueueStatus.PAUSED}:
+                return False
+            item.status, item.progress, item.error = QueueStatus.QUEUED, 0, None
         self.save_queue()
-
         return True
 
     def due_count(self) -> int:
         now = datetime.now()
-        return sum(
-            1
-            for item in self._queue
-            if item.status == QueueStatus.QUEUED
-            or (
-                item.status == QueueStatus.SCHEDULED
-                and item.scheduled_at is not None
-                and item.scheduled_at <= now
-            )
-        )
+        with self._lock:
+            return sum(1 for item in self._queue if item.status == QueueStatus.QUEUED or (item.status == QueueStatus.SCHEDULED and item.scheduled_at and item.scheduled_at <= now))
 
     def remove(self, item_id: str) -> bool:
-        for index, item in enumerate(self._queue):
-            if item.id == item_id:
-                del self._queue[index]
-                self.save_queue()
-                return True
+        with self._lock:
+            for index, item in enumerate(self._queue):
+                if item.id == item_id:
+                    del self._queue[index]
+                    self.save_queue()
+                    return True
         return False
 
     def move(self, item_id: str, offset: int) -> bool:
-        items = list(self._queue)
-        index = next((i for i, item in enumerate(items) if item.id == item_id), -1)
-        if index < 0:
-            return False
-        new_index = max(0, min(len(items) - 1, index + offset))
-        items.insert(new_index, items.pop(index))
-        self._queue = deque(items)
+        with self._lock:
+            items = list(self._queue)
+            index = next((i for i, item in enumerate(items) if item.id == item_id), -1)
+            if index < 0:
+                return False
+            new_index = max(0, min(len(items) - 1, index + offset))
+            items.insert(new_index, items.pop(index))
+            self._queue = deque(items)
         self.save_queue()
         return True
 
@@ -231,8 +193,10 @@ class QueueService:
         return next((item for item in self._queue if item.id == item_id), None)
 
     def list_items(self) -> list[QueueItem]:
-        return list(self._queue)
+        with self._lock:
+            return list(self._queue)
 
     def clear(self) -> None:
-        self._queue.clear()
+        with self._lock:
+            self._queue.clear()
         self.save_queue()

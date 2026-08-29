@@ -1,158 +1,32 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QThread, Signal
-from app.core.ytdlp_factory import create_ytdlp
+
+from app.core.download_engine import DownloadEngine
 from app.core.models import DownloadKind, DownloadOptions
 from app.utils.error_handler import ErrorHandler
 
 
-class DownloadService:
-    """Build and run yt-dlp downloads from shared backend options."""
-
-    def build_format(self, options: DownloadOptions) -> str:
-        if options.kind == DownloadKind.AUDIO:
-            return "bestaudio/best"
-
-        height = self._height(options.quality)
-        height_filter = f"[height<={height}]" if height else ""
-        codec_filter = "[vcodec*=avc1]" if options.video_codec == "h264" else ""
-
-        if options.kind == DownloadKind.VIDEO:
-            preferred = f"bestvideo{height_filter}{codec_filter}"
-            fallback = f"bestvideo{height_filter}{codec_filter}/best"
-            return f"{preferred}/{fallback}"
-
-        audio_filter = "[acodec*=mp4a]" if options.audio_codec in {"aac", "m4a"} else ""
-        preferred = f"bestvideo{height_filter}{codec_filter}+bestaudio{audio_filter}"
-        fallback = (
-            f"bestvideo{height_filter}{codec_filter}+bestaudio/best{height_filter}/best"
-        )
-        return f"{preferred}/{fallback}"
-
-    def build_options(
-        self,
-        options: DownloadOptions,
-        progress_hook: Any | None = None,
-    ) -> dict[str, Any]:
-        ydl_options: dict[str, Any] = {
-            "outtmpl": str(options.output_dir / options.filename_template),
-            "format": self.build_format(options),
-            "windowsfilenames": True,
-            "continuedl": True,
-            "overwrites": False,
-            "retries": options.max_retries,
-            "fragment_retries": options.max_retries,
-            "file_access_retries": options.max_retries,
-            "concurrent_fragment_downloads": options.concurrent_fragments,
-            "noplaylist": not options.playlist,
-            "quiet": True,
-            "no_warnings": True,
-            "merge_output_format": options.container,
-            "postprocessors": self._postprocessors(options),
-            "restrictfilenames": False,
-            "trim_file_name": 240,
-        }
-        if options.playlist_items:
-            ydl_options["playlist_items"] = ",".join(options.playlist_items)
-        if options.ffmpeg_path:
-            ydl_options["ffmpeg_location"] = options.ffmpeg_path
-        if progress_hook:
-            ydl_options["progress_hooks"] = [progress_hook]
-        if options.write_subtitles:
-            ydl_options["writesubtitles"] = True
-        if options.write_auto_subtitles:
-            ydl_options["writeautomaticsub"] = True
-        if options.write_subtitles or options.write_auto_subtitles:
-            ydl_options["subtitleslangs"] = options.subtitle_languages or (
-                [options.translation_language]
-                if options.translate_subtitles
-                else ["en"]
-            )
-            ydl_options["subtitlesformat"] = options.subtitle_format
-        if options.translate_subtitles:
-            ydl_options["translate_subtitles"] = True
-            ydl_options["subtitleslangs"] = [options.translation_language]
-        return ydl_options
-
-    def download(
-        self,
-        options: DownloadOptions,
-        progress_hook: Any | None = None,
-    ) -> None:
-        options.output_dir.mkdir(parents=True, exist_ok=True)
-        if self._output_exists(options):
-            raise FileExistsError(
-                f"Output already exists for template {options.filename_template}."
-            )
-        with create_ytdlp(self.build_options(options, progress_hook)) as ydl:
-            ydl.download([options.url])
-
-    def _output_exists(self, options: DownloadOptions) -> bool:
-        pattern = options.filename_template
-        if "%(ext)s" in pattern:
-            pattern = pattern.replace("%(ext)s", "*")
-        else:
-            pattern = f"{pattern}*"
-        return any(options.output_dir.glob(pattern))
-
-    def _postprocessors(self, options: DownloadOptions) -> list[dict[str, Any]]:
-        processors: list[dict[str, Any]] = []
-        if options.kind == DownloadKind.AUDIO:
-            processors.append(
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": options.audio_codec,
-                    "preferredquality": options.audio_bitrate,
-                }
-            )
-        if options.embed_metadata:
-            processors.append({"key": "FFmpegMetadata"})
-        if options.embed_thumbnail and options.kind == DownloadKind.AUDIO:
-            processors.append({"key": "EmbedThumbnail"})
-        if options.embed_subtitles:
-            processors.append({"key": "FFmpegEmbedSubtitle"})
-        return processors
-
-    def _height(self, quality: str) -> int | None:
-        if not quality or quality == "Best":
-            return None
-        try:
-            return int(quality.removesuffix("p"))
-        except ValueError:
-            return None
+class DownloadService(DownloadEngine):
+    """Desktop-compatible facade over the shared yt-dlp engine."""
 
 
 class DownloadWorker(QThread):
     progress = Signal(int)
     status = Signal(str)
-
     speed = Signal(str)
     eta = Signal(str)
     size = Signal(str, str)
-
     finished = Signal(str)
     error = Signal(str)
 
-    def __init__(
-        self,
-        *,
-        options: DownloadOptions | None = None,
-        url: str = "",
-        output_dir: str | Path = "",
-        audio_only: bool = False,
-        quality: str = "Best",
-        audio_codec: str = "mp3",
-        audio_bitrate: str = "320",
-        container: str = "mp4",
-        filename_template: str = "%(title)s.%(ext)s",
-    ) -> None:
+    def __init__(self, *, options: DownloadOptions | None = None, url: str = "", output_dir: str = "", audio_only: bool = False, quality: str = "Best", audio_codec: str = "mp3", audio_bitrate: str = "320", container: str = "mp4", filename_template: str = "%(title)s.%(ext)s") -> None:
         super().__init__()
         self.options = options or DownloadOptions(
             url=url,
-            output_dir=Path(output_dir),
+            output_dir=__import__("pathlib").Path(output_dir),
             kind=DownloadKind.AUDIO if audio_only else DownloadKind.VIDEO_AUDIO,
             quality=quality,
             audio_codec=audio_codec,
@@ -167,63 +41,20 @@ class DownloadWorker(QThread):
     def hook(self, data: dict[str, Any]) -> None:
         if self.cancelled:
             raise RuntimeError("Download cancelled")
-
         status = data.get("status")
-
         if status == "downloading":
-
-            downloaded = data.get("downloaded_bytes", 0)
-
-            total = (
-                data.get("total_bytes")
-                or data.get("total_bytes_estimate")
-                or 0
-            )
-
+            downloaded = data.get("downloaded_bytes", 0) or 0
+            total = data.get("total_bytes") or data.get("total_bytes_estimate") or 0
             if total > 0:
-
-                percent = int(downloaded * 100 / total)
-
-                self.progress.emit(percent)
-
+                self.progress.emit(min(100, int(downloaded * 100 / total)))
             speed = data.get("speed") or 0
-
             eta = data.get("eta") or 0
-
-            downloaded_mb = downloaded / 1024 / 1024
-
-            total_mb = total / 1024 / 1024 if total else 0
-
-            speed_text = (
-                f"{speed / 1024 / 1024:.2f} MB/s"
-                if speed
-                else "--"
-            )
-
-            eta_text = (
-                f"{eta}s"
-                if eta
-                else "--"
-            )
-
-            self.speed.emit(speed_text)
-
-            self.size.emit(
-                f"{downloaded_mb:.1f} MB",
-                f"{total_mb:.1f} MB",
-            )
-
-            self.eta.emit(eta_text)
-
+            self.speed.emit(f"{speed / 1024 / 1024:.2f} MB/s" if speed else "--")
+            self.size.emit(f"{downloaded / 1024 / 1024:.1f} MB", f"{total / 1024 / 1024:.1f} MB" if total else "--")
+            self.eta.emit(f"{eta}s" if eta else "--")
             self.status.emit("Downloading")
-
         elif status == "finished":
-
-            self.output_file = (
-                data.get("filename")
-                or self.output_file
-            )
-
+            self.output_file = data.get("filename") or self.output_file
             self.status.emit("Finalizing...")
 
     def build_format(self) -> str:
@@ -234,15 +65,9 @@ class DownloadWorker(QThread):
             self.service.download(self.options, self.hook)
             self.progress.emit(100)
             self.status.emit("Finished")
-            output_path = self.output_file or str(self.options.output_dir)
-            self.finished.emit(output_path)
+            self.finished.emit(self.output_file or str(self.options.output_dir))
         except Exception as exc:
-            message = ErrorHandler.handle(
-                exc,
-                context="DownloadWorker",
-            )
-
-            self.error.emit(message)
+            self.error.emit(ErrorHandler.handle(exc, context="DownloadWorker"))
 
     def stop(self) -> None:
         self.cancelled = True
