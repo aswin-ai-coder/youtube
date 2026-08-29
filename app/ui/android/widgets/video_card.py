@@ -1,7 +1,7 @@
 from kivy.metrics import dp
 
 from kivy.uix.image import AsyncImage
-
+from kivymd.uix.button import MDIconButton
 from kivymd.uix.card import MDCard
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
@@ -17,7 +17,10 @@ class VideoCard(MDCard):
         self.padding = dp(18)
         self.spacing = dp(16)
         self.radius = [24]
-
+        self.favorite_button = MDIconButton(
+            icon="heart-outline",
+        )
+        self.add_widget(self.favorite_button)
         self.thumbnail = AsyncImage(
             size_hint_y=None,
             height=dp(200),

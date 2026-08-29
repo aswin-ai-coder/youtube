@@ -1,5 +1,6 @@
 from kivy.metrics import dp
-
+from kivy.app import App
+from app.core.theme_service import ThemeService
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.boxlayout import MDBoxLayout
@@ -17,7 +18,7 @@ class SettingsScreen(MDScreen):
         super().__init__(**kwargs)
 
         self.settings = SettingsService()
-
+        self.theme = ThemeService()
         scroll = MDScrollView()
 
         root = MDBoxLayout(
@@ -108,6 +109,82 @@ class SettingsScreen(MDScreen):
         save.bind(
             on_release=self.save_settings
         )
+        # ---------------- Theme ----------------
+
+        root.add_widget(
+
+            MDLabel(
+                text="Theme",
+                adaptive_height=True,
+            )
+
+        )
+
+        light = MDButton(
+            style="outlined",
+        )
+
+        light.add_widget(
+            MDButtonText(
+                text="Light Theme",
+            )
+        )
+
+        light.bind(
+            on_release=lambda x: self.change_theme("Light")
+        )
+
+        root.add_widget(light)
+
+        dark = MDButton(
+            style="outlined",
+        )
+
+        dark.add_widget(
+            MDButtonText(
+                text="Dark Theme",
+            )
+        )
+
+        dark.bind(
+            on_release=lambda x: self.change_theme("Dark")
+        )
+
+        root.add_widget(dark)
+        root.add_widget(
+
+            MDLabel(
+                text="Accent Color",
+                adaptive_height=True,
+            )
+
+        )
+
+        for color in (
+
+            "Blue",
+            "Green",
+            "Red",
+            "Orange",
+            "Purple",
+
+        ):
+
+            button = MDButton(
+                style="outlined",
+            )
+
+            button.add_widget(
+                MDButtonText(
+                    text=color,
+                )
+            )
+
+            button.bind(
+                on_release=lambda x, c=color: self.change_color(c)
+            )
+
+            root.add_widget(button)
 
         root.add_widget(save)
 
@@ -140,4 +217,25 @@ class SettingsScreen(MDScreen):
         self.settings.save()
 
         print("Settings Saved")
-        
+
+    def change_theme(self, theme):
+
+        app = App.get_running_app()
+
+        self.theme.save(theme)
+
+        app.theme_cls.theme_style = theme
+
+    def change_color(self, color):
+
+        app = App.get_running_app()
+
+        app.theme_cls.primary_palette = color
+
+        self.theme.settings.set(
+            "primary_color",
+            color,
+        )
+
+        self.theme.settings.save()
+

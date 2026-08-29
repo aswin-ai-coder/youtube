@@ -17,6 +17,7 @@ class QueueItemFactory:
         playlist: PlaylistMetadata,
         allow_playlist_prompt: bool = True,
         force_playlist: bool | None = None,
+        write_subtitles: bool | None = None,
     ) -> QueueItem | None:
         scheduled_at = None
         if self.window.schedule_enabled.isChecked():
@@ -39,7 +40,11 @@ class QueueItemFactory:
             filename_template=self.window.filename_input.text().strip()
             or "%(title)s.%(ext)s",
             subtitle_languages=self._subtitle_languages(),
-            write_subtitles=bool(self._subtitle_languages()),
+            write_subtitles=(
+                write_subtitles
+                if write_subtitles is not None
+                else bool(self._subtitle_languages())
+            ),
             write_auto_subtitles=self.window.auto_subs.isChecked(),
             translate_subtitles=self.window.translate_subs.isChecked(),
             translation_language=self.window.translation_lang.currentText(),

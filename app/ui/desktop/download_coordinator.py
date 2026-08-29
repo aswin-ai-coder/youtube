@@ -15,6 +15,9 @@ class DownloadCoordinator(QObject):
     status_changed = Signal(str)
     completed = Signal(str, str)
     failed = Signal(str, str)
+    speed_changed = Signal(str)
+    size_changed = Signal(str, str)
+    eta_changed = Signal(str)
 
     def __init__(self, queue: QueueService, settings, parent=None) -> None:
         super().__init__(parent)
@@ -85,6 +88,18 @@ class DownloadCoordinator(QObject):
             lambda value, item_id=item.id: self._progress(item_id, value)
         )
         worker.status.connect(self.status_changed.emit)
+
+        worker.speed.connect(
+            self.speed_changed.emit
+        )
+
+        worker.size.connect(
+            self.size_changed.emit
+        )
+
+        worker.eta.connect(
+            self.eta_changed.emit
+        )
         worker.finished.connect(
             lambda output, item_id=item.id: self._finished(item_id, output)
         )

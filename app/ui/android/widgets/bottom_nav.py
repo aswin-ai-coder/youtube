@@ -1,42 +1,44 @@
-from kivy.metrics import dp
-
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.button import (
-    MDButton,
-    MDButtonIcon,
-    MDButtonText,
+from kivymd.uix.navigationbar import (
+    MDNavigationBar,
+    MDNavigationItem,
+    MDNavigationItemIcon,
+    MDNavigationItemLabel,
 )
 
 
-class BottomNav(MDBoxLayout):
+class BottomNav(MDNavigationBar):
 
-    def __init__(self, **kwargs):
-
+    def __init__(self, callback, **kwargs):
         super().__init__(**kwargs)
 
-        self.orientation = "horizontal"
+        tabs = [
+            ("home", "home", "Home"),
+            ("queue", "download", "Queue"),
+            ("history", "history", "History"),
+            ("favorites", "heart", "Favorites"),
+            ("settings", "cog", "Settings"),
+        ]
 
-        self.adaptive_height = True
+        for screen, icon, text in tabs:
 
-        self.spacing = dp(8)
+            item = MDNavigationItem()
 
-        self.padding = dp(12)
+            item.screen = screen
 
-        self.add_widget(self.make_button("home", "Home"))
-        self.add_widget(self.make_button("download", "Queue"))
-        self.add_widget(self.make_button("history", "History"))
-        self.add_widget(self.make_button("cog", "Settings"))
+            item.add_widget(
+                MDNavigationItemIcon(
+                    icon=icon,
+                )
+            )
 
-    def make_button(self, icon, text):
+            item.add_widget(
+                MDNavigationItemLabel(
+                    text=text,
+                )
+            )
 
-        button = MDButton(style="text")
+            item.bind(
+                on_release=lambda x, s=screen: callback(s)
+            )
 
-        button.add_widget(
-            MDButtonIcon(icon=icon)
-        )
-
-        button.add_widget(
-            MDButtonText(text=text)
-        )
-
-        return button
+            self.add_widget(item)

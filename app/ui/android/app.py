@@ -1,13 +1,8 @@
 from kivymd.app import MDApp
-
+from app.core.theme_service import ThemeService
 from kivymd.uix.screenmanager import MDScreenManager
-
-from kivymd.uix.navigationbar import (
-    MDNavigationBar,
-    MDNavigationItem,
-    MDNavigationItemIcon,
-    MDNavigationItemLabel,
-)
+from kivy.uix.screenmanager import SlideTransition
+from app.ui.android.widgets.bottom_nav import BottomNav
 
 from kivymd.uix.boxlayout import MDBoxLayout
 
@@ -15,16 +10,14 @@ from app.ui.android.screens.home_screen import HomeScreen
 from app.ui.android.screens.queue_screen import QueueScreen
 from app.ui.android.screens.history_screen import HistoryScreen
 from app.ui.android.screens.settings_screen import SettingsScreen
-
+from app.ui.android.screens.favorites_screen import FavoritesScreen
 
 class YouTubeDownloaderApp(MDApp):
 
     def build(self):
-
         self.title = "YouTube Downloader"
-
-        self.theme_cls.theme_style = "Dark"
-
+        self.theme = ThemeService()
+        self.theme.apply(self)
         self.theme_cls.primary_palette = "Blue"
 
         root = MDBoxLayout(
@@ -36,93 +29,25 @@ class YouTubeDownloaderApp(MDApp):
         self.sm.add_widget(HomeScreen(name="home"))
         self.sm.add_widget(QueueScreen(name="queue"))
         self.sm.add_widget(HistoryScreen(name="history"))
+
+        # Only if FavoritesScreen exists
+        self.sm.add_widget(FavoritesScreen(name="favorites"))
+
         self.sm.add_widget(SettingsScreen(name="settings"))
 
-        nav = MDNavigationBar()
-
-        home = MDNavigationItem()
-
-        home.add_widget(
-            MDNavigationItemIcon(
-                icon="home",
-            )
-        )
-
-        home.add_widget(
-            MDNavigationItemLabel(
-                text="Home",
-            )
-        )
-
-        queue = MDNavigationItem()
-
-        queue.add_widget(
-            MDNavigationItemIcon(
-                icon="download",
-            )
-        )
-
-        queue.add_widget(
-            MDNavigationItemLabel(
-                text="Queue",
-            )
-        )
-
-        history = MDNavigationItem()
-
-        history.add_widget(
-            MDNavigationItemIcon(
-                icon="history",
-            )
-        )
-
-        history.add_widget(
-            MDNavigationItemLabel(
-                text="History",
-            )
-        )
-
-        settings = MDNavigationItem()
-
-        settings.add_widget(
-            MDNavigationItemIcon(
-                icon="cog",
-            )
-        )
-
-        settings.add_widget(
-            MDNavigationItemLabel(
-                text="Settings",
-            )
-        )
-
-        home.bind(
-            on_release=lambda x: self.change("home")
-        )
-
-        queue.bind(
-            on_release=lambda x: self.change("queue")
-        )
-
-        history.bind(
-            on_release=lambda x: self.change("history")
-        )
-
-        settings.bind(
-            on_release=lambda x: self.change("settings")
-        )
-
-        nav.add_widget(home)
-        nav.add_widget(queue)
-        nav.add_widget(history)
-        nav.add_widget(settings)
+        self.nav = BottomNav(self.change)
 
         root.add_widget(self.sm)
-        root.add_widget(nav)
+        root.add_widget(self.nav)
 
+        self.change("home")
         return root
 
     def change(self, screen):
+        self.sm.transition = SlideTransition(
+            direction="left",
+            duration=0.2,
+        )
 
         self.sm.current = screen
 

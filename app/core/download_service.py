@@ -128,6 +128,11 @@ class DownloadService:
 class DownloadWorker(QThread):
     progress = Signal(int)
     status = Signal(str)
+
+    speed = Signal(str)
+    eta = Signal(str)
+    size = Signal(str, str)
+
     finished = Signal(str)
     error = Signal(str)
 
@@ -162,20 +167,64 @@ class DownloadWorker(QThread):
     def hook(self, data: dict[str, Any]) -> None:
         if self.cancelled:
             raise RuntimeError("Download cancelled")
+
         status = data.get("status")
+
         if status == "downloading":
+
             downloaded = data.get("downloaded_bytes", 0)
-            total = data.get("total_bytes") or data.get("total_bytes_estimate") or 0
+
+            total = (
+                data.get("total_bytes")
+                or data.get("total_bytes_estimate")
+                or 0
+            )
+
             if total > 0:
-                self.progress.emit(int(downloaded * 100 / total))
-            speed = data.get("speed")
-            eta = data.get("eta")
-            speed_text = f"{speed / 1024 / 1024:.2f} MB/s" if speed else ""
-            eta_text = f"{eta}s" if eta else ""
-            self.status.emit(f"Downloading {speed_text} ETA {eta_text}".strip())
+
+                percent = int(downloaded * 100 / total)
+
+                self.progress.emit(percent)
+
+            speed = data.get("speed") or 0
+
+            eta = data.get("eta") or 0
+
+            downloaded_mb = downloaded / 1024 / 1024
+
+            total_mb = total / 1024 / 1024 if total else 0
+
+            speed_text = (
+                f"{speed / 1024 / 1024:.2f} MB/s"
+                if speed
+                else "--"
+            )
+
+            eta_text = (
+                f"{eta}s"
+                if eta
+                else "--"
+            )
+
+            self.speed.emit(speed_text)
+
+            self.size.emit(
+                f"{downloaded_mb:.1f} MB",
+                f"{total_mb:.1f} MB",
+            )
+
+            self.eta.emit(eta_text)
+
+            self.status.emit("Downloading")
+
         elif status == "finished":
-            self.output_file = data.get("filename") or self.output_file
-            self.status.emit("Finalizing file...")
+
+            self.output_file = (
+                data.get("filename")
+                or self.output_file
+            )
+
+            self.status.emit("Finalizing...")
 
     def build_format(self) -> str:
         return self.service.build_format(self.options)

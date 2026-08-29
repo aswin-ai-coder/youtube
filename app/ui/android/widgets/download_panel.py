@@ -1,5 +1,5 @@
 from kivy.metrics import dp
-
+from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.uix.card import MDCard
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
@@ -100,7 +100,19 @@ class DownloadPanel(MDCard):
         self.quality_button.bind(
             on_release=lambda x: self.menu.open()
         )
+        self.add_widget(
+            MDLabel(
+                text="Subtitles",
+                adaptive_height=True,
+            )
 
+        )
+
+        self.subtitle = MDCheckbox(
+            active=False,
+        )
+
+        self.add_widget(self.subtitle)
         # ---------------- Status ----------------
 
         self.status = MDLabel(
@@ -122,6 +134,27 @@ class DownloadPanel(MDCard):
         )
 
         self.add_widget(self.percent)
+
+        self.speed = MDLabel(
+            text="Speed: --",
+            adaptive_height=True,
+        )
+
+        self.add_widget(self.speed)
+
+        self.size = MDLabel(
+            text="Size: -- / --",
+            adaptive_height=True,
+        )
+
+        self.add_widget(self.size)
+
+        self.eta = MDLabel(
+            text="ETA: --",
+            adaptive_height=True,
+        )
+
+        self.add_widget(self.eta)
 
         self.download_button = MDButton(
             style="filled",
@@ -183,6 +216,20 @@ class DownloadPanel(MDCard):
 
         self.status.text = text
 
+    def set_speed(self, text):
+
+        self.speed.text = f"Speed: {text}"
+
+
+    def set_size(self, downloaded, total):
+
+        self.size.text = f"Size: {downloaded} / {total}"
+
+
+    def set_eta(self, text):
+
+        self.eta.text = f"ETA: {text}"
+
     def finish(self):
 
         self.progress.value = 100
@@ -204,3 +251,8 @@ class DownloadPanel(MDCard):
     def selected_type(self):
 
         return self.type
+
+    def subtitles_enabled(self):
+
+        return self.subtitle.active
+
