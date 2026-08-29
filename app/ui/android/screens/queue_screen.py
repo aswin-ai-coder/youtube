@@ -4,7 +4,7 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.boxlayout import MDBoxLayout
 
-from app.ui.android.widgets.queue_item import QueueItem
+from app.ui.android.widgets.queue_item import QueueItem as QueueItemCard
 
 
 class QueueScreen(MDScreen):
@@ -34,7 +34,7 @@ class QueueScreen(MDScreen):
         callbacks,
     ):
 
-        card = QueueItem(
+        card = QueueItemCard(
             item_id,
             title,
             callbacks,
