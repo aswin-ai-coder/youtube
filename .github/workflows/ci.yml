@@ -129,6 +129,9 @@ jobs:
         run: |
           mkdir -p "$HOME/.buildozer/android/platform"
           ln -sfn "$ANDROID_SDK_ROOT" "$HOME/.buildozer/android/platform/android-sdk"
+          # Buildozer 1.6.0/p4a may look for the legacy SDK layout.
+          mkdir -p "$ANDROID_SDK_ROOT/tools/bin"
+          ln -sfn "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
           rm -rf .buildozer bin
 
       - name: Verify Android SDK tooling
@@ -136,6 +139,8 @@ jobs:
           sdkmanager --version
           "$ANDROID_SDK_ROOT/platform-tools/adb" version
           test -x "$ANDROID_SDK_ROOT/build-tools/35.0.1/aidl"
+          test -x "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
+          "$ANDROID_SDK_ROOT/tools/bin/sdkmanager" --version
 
       - name: Build Android debug APK
         env:
