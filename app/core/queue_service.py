@@ -6,8 +6,8 @@ from datetime import datetime
 import json
 from pathlib import Path
 from threading import RLock
-from uuid import uuid4
 from typing import Iterable
+from uuid import uuid4
 
 from app.core.models import DownloadKind, QueueStatus
 from app.utils.logger import get_logger
@@ -37,6 +37,9 @@ class QueueItem:
     translation_language: str = "en"
     subtitle_format: str = "srt"
     embed_subtitles: bool = False
+    embed_thumbnail: bool = True
+    embed_metadata: bool = True
+    thumbnail_url: str | None = None
     playlist: bool = False
     playlist_items: list[str] = field(default_factory=list)
     scheduled_at: datetime | None = None
@@ -75,7 +78,9 @@ class QueueService:
                 items.append(data)
             temp = self._queue_file.with_suffix(".json.tmp")
             try:
-                temp.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+                temp.write_text(
+                    json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
                 temp.replace(self._queue_file)
             except Exception as exc:
                 self.logger.error(f"Failed to save queue: {exc}")
@@ -96,10 +101,19 @@ class QueueService:
                 for raw in data:
                     if not isinstance(raw, dict):
                         continue
+                    raw = dict(raw)
                     if raw.get("scheduled_at"):
                         raw["scheduled_at"] = datetime.fromisoformat(raw["scheduled_at"])
-                    raw["status"] = QueueStatus(raw.get("status", QueueStatus.QUEUED.value))
-                    raw["kind"] = DownloadKind(raw.get("kind", DownloadKind.VIDEO_AUDIO.value))
+                    raw["status"] = QueueStatus(
+                        raw.get("status", QueueStatus.QUEUED.value)
+                    )
+                    raw["kind"] = DownloadKind(
+                        raw.get("kind", DownloadKind.VIDEO_AUDIO.value)
+                    )
+                    # Forward-compatible loading for queues created by older builds.
+                    raw.setdefault("embed_thumbnail", True)
+                    raw.setdefault("embed_metadata", True)
+                    raw.setdefault("thumbnail_url", None)
                     item = QueueItem(**raw)
                     if item.status == QueueStatus.RUNNING:
                         item.status = QueueStatus.QUEUED
@@ -128,7 +142,11 @@ class QueueService:
         now = datetime.now()
         with self._lock:
             for item in self._queue:
-                if item.status == QueueStatus.SCHEDULED and item.scheduled_at and item.scheduled_at <= now:
+                if (
+                    item.status == QueueStatus.SCHEDULED
+                    and item.scheduled_at
+                    and item.scheduled_at <= now
+                ):
                     item.status = QueueStatus.QUEUED
                 if item.status == QueueStatus.QUEUED:
                     item.status = QueueStatus.RUNNING
@@ -138,7 +156,16 @@ class QueueService:
         self.save_queue()
         return item
 
-    def update(self, item_id: str, *, status: QueueStatus | None = None, progress: int | None = None, error: str | None = None, title: str | None = None) -> QueueItem | None:
+    def update(
+        self,
+        item_id: str,
+        *,
+        status: QueueStatus | None = None,
+        progress: int | None = None,
+        error: str | None = None,
+        title: str | None = None,
+        thumbnail_url: str | None = None,
+    ) -> QueueItem | None:
         with self._lock:
             item = self.get(item_id)
             if not item:
@@ -151,13 +178,19 @@ class QueueService:
                 item.error = error
             if title is not None:
                 item.title = title
+            if thumbnail_url is not None:
+                item.thumbnail_url = thumbnail_url
         self.save_queue()
         return item
 
     def retry(self, item_id: str) -> bool:
         with self._lock:
             item = self.get(item_id)
-            if not item or item.status not in {QueueStatus.FAILED, QueueStatus.CANCELLED, QueueStatus.PAUSED}:
+            if not item or item.status not in {
+                QueueStatus.FAILED,
+                QueueStatus.CANCELLED,
+                QueueStatus.PAUSED,
+            }:
                 return False
             item.status, item.progress, item.error = QueueStatus.QUEUED, 0, None
         self.save_queue()
@@ -166,7 +199,16 @@ class QueueService:
     def due_count(self) -> int:
         now = datetime.now()
         with self._lock:
-            return sum(1 for item in self._queue if item.status == QueueStatus.QUEUED or (item.status == QueueStatus.SCHEDULED and item.scheduled_at and item.scheduled_at <= now))
+            return sum(
+                1
+                for item in self._queue
+                if item.status == QueueStatus.QUEUED
+                or (
+                    item.status == QueueStatus.SCHEDULED
+                    and item.scheduled_at
+                    and item.scheduled_at <= now
+                )
+            )
 
     def remove(self, item_id: str) -> bool:
         with self._lock:
@@ -180,7 +222,9 @@ class QueueService:
     def move(self, item_id: str, offset: int) -> bool:
         with self._lock:
             items = list(self._queue)
-            index = next((i for i, item in enumerate(items) if item.id == item_id), -1)
+            index = next(
+                (i for i, item in enumerate(items) if item.id == item_id), -1
+            )
             if index < 0:
                 return False
             new_index = max(0, min(len(items) - 1, index + offset))
@@ -190,7 +234,8 @@ class QueueService:
         return True
 
     def get(self, item_id: str) -> QueueItem | None:
-        return next((item for item in self._queue if item.id == item_id), None)
+        with self._lock:
+            return next((item for item in self._queue if item.id == item_id), None)
 
     def list_items(self) -> list[QueueItem]:
         with self._lock:
