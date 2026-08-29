@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +33,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Compile Python sources
-        run: python -m compileall -q app main.py
+        run: python -m compileall -q app main.py service
 
       - name: Run tests
         env:
@@ -41,7 +41,7 @@ jobs:
         run: python -m pytest -q
 
   desktop-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: test
     steps:
       - name: Checkout
@@ -70,8 +70,11 @@ jobs:
           if-no-files-found: error
 
   android-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: test
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/.android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/.android-sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,43 +82,58 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.10"
+          cache: pip
 
-      - name: Install Buildozer dependencies
+      - name: Install Android build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            git \
-            zip \
-            unzip \
-            openjdk-17-jdk \
-            autoconf \
-            automake \
-            libtool \
-            libtool-bin \
-            libltdl-dev \
-            pkg-config \
-            m4 \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            cmake \
-            libffi-dev \
-            libssl-dev
-
+            build-essential git zip unzip \
+            openjdk-11-jdk \
+            autoconf automake libtool libtool-bin libltdl-dev m4 \
+            pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
+            cmake libffi-dev libssl-dev \
+            liblzma-dev libsqlite3-dev
           python -m pip install --upgrade pip
           python -m pip install buildozer==1.6.0 cython==0.29.37
 
-      - name: Prepare Android SDK licenses
+      - name: Install modern Android command-line tools
         run: |
-          mkdir -p "$HOME/.buildozer/android/platform/android-sdk/licenses"
-          yes | sdkmanager --licenses > /dev/null || true
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip -o /tmp/cmdline-tools.zip
+          unzip -q /tmp/cmdline-tools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+          mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/build-tools/35.0.1" >> "$GITHUB_PATH"
+
+      - name: Install Android SDK packages and accept licenses
+        run: |
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
+          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
+            "platform-tools" \
+            "build-tools;35.0.1" \
+            "platforms;android-35" \
+            "cmdline-tools;latest"
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
+
+      - name: Configure Buildozer to use prepared Android SDK
+        run: |
+          mkdir -p "$HOME/.buildozer/android/platform"
+          ln -sfn "$ANDROID_SDK_ROOT" "$HOME/.buildozer/android/platform/android-sdk"
+          rm -rf .buildozer bin
+
+      - name: Verify Android SDK tooling
+        run: |
+          sdkmanager --version
+          "$ANDROID_SDK_ROOT/platform-tools/adb" version
+          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.1/aidl"
 
       - name: Build Android debug APK
+        env:
+          APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
         run: |
-          rm -rf .buildozer
-          rm -rf bin
           yes | buildozer android debug
 
       - name: Upload APK
