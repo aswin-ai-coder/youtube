@@ -31,7 +31,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libcairo2-dev pkg-config \
+            libcairo2-dev pkg-config python3-dev \
             libmtdev-dev \
             xvfb \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
@@ -51,11 +51,17 @@ jobs:
           python - <<'PY'
           import importlib
           import sys
+          import traceback
 
-          packages = ("kivy", "kivymd", "pycairo", "asyncgui", "asynckivy", "pytest")
+          packages = ("kivy", "kivymd", "cairo", "asyncgui", "asynckivy", "pytest")
           for name in packages:
-              module = importlib.import_module(name)
-              print(f"{name}: {getattr(module, '__version__', 'installed')}")
+              try:
+                  module = importlib.import_module(name)
+                  print(f"{name}: {getattr(module, '__version__', 'installed')}")
+              except BaseException:
+                  print(f"ERROR: Failed to import {name}", file=sys.stderr)
+                  traceback.print_exc()
+                  raise
           print("Python:", sys.version)
           PY
 
@@ -69,7 +75,6 @@ jobs:
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
         run: |
-          set -o pipefail
           xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
             python - <<'PY'
           import sys
@@ -112,7 +117,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev pkg-config
+          sudo apt-get install -y libcairo2-dev pkg-config python3-dev
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller
