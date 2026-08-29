@@ -7,7 +7,12 @@ filetype==1.2.0
 idna==3.18
 Kivy==2.3.1
 Kivy-Garden==0.1.5
-kivymd==1.2.0
+kivymd==2.0.0
+materialyoucolor==3.0.3
+materialshapes==0.3.0
+asynckivy==0.6.4
+asyncgui==0.6.3
+pycairo==1.28.0
 pexpect==4.9.0
 pillow==12.3.0
 plyer==2.1.0
