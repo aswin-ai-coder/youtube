@@ -35,6 +35,11 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app main.py service
 
+      - name: Smoke-test Android UI imports
+        env:
+          KIVY_NO_ARGS: "1"
+        run: python -c "from app.ui.android.app import YouTubeDownloaderApp; print('Android UI imports OK:', YouTubeDownloaderApp.__name__)"
+
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
@@ -129,7 +134,6 @@ jobs:
         run: |
           mkdir -p "$HOME/.buildozer/android/platform"
           ln -sfn "$ANDROID_SDK_ROOT" "$HOME/.buildozer/android/platform/android-sdk"
-          # Buildozer 1.6.0/p4a may look for the legacy SDK layout.
           mkdir -p "$ANDROID_SDK_ROOT/tools/bin"
           ln -sfn "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
           rm -rf .buildozer bin
