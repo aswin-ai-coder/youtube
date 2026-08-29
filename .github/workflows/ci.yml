@@ -84,12 +84,39 @@ jobs:
       - name: Install Buildozer dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git zip unzip openjdk-17-jdk autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            autoconf \
+            automake \
+            libtool \
+            libtool-bin \
+            libltdl-dev \
+            pkg-config \
+            m4 \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            cmake \
+            libffi-dev \
+            libssl-dev
+
           python -m pip install --upgrade pip
           python -m pip install buildozer==1.6.0 cython==0.29.37
 
+      - name: Prepare Android SDK licenses
+        run: |
+          mkdir -p "$HOME/.buildozer/android/platform/android-sdk/licenses"
+          yes | sdkmanager --licenses > /dev/null || true
+
       - name: Build Android debug APK
-        run: yes | buildozer android debug
+        run: |
+          rm -rf .buildozer
+          rm -rf bin
+          yes | buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
