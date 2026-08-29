@@ -1,3 +1,6 @@
+import sys
+import traceback
+
 from kivymd.app import MDApp
 from app.core.theme_service import ThemeService
 from kivymd.uix.screenmanager import MDScreenManager
@@ -6,11 +9,17 @@ from app.ui.android.widgets.bottom_nav import BottomNav
 
 from kivymd.uix.boxlayout import MDBoxLayout
 
-from app.ui.android.screens.home_screen import HomeScreen
-from app.ui.android.screens.queue_screen import QueueScreen
-from app.ui.android.screens.history_screen import HistoryScreen
-from app.ui.android.screens.settings_screen import SettingsScreen
-from app.ui.android.screens.favorites_screen import FavoritesScreen
+# Import screen modules with explicit error handling
+try:
+    from app.ui.android.screens.home_screen import HomeScreen
+    from app.ui.android.screens.queue_screen import QueueScreen
+    from app.ui.android.screens.history_screen import HistoryScreen
+    from app.ui.android.screens.settings_screen import SettingsScreen
+    from app.ui.android.screens.favorites_screen import FavoritesScreen
+except ImportError as e:
+    print(f"ERROR: Failed to import UI components: {e}", file=sys.stderr)
+    traceback.print_exc()
+    raise
 
 class YouTubeDownloaderApp(MDApp):
 
