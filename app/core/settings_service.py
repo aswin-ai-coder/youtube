@@ -14,6 +14,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "concurrent_fragments": 4,
     "ffmpeg_path": "",
     "update_channel": "stable",
+    "notifications": True,
+    "clipboard_monitoring": True,
     "window_geometry": "",
     "splitter_sizes": [],
 }
@@ -34,12 +36,16 @@ class SettingsService:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     self._data.update(loaded)
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, OSError):
                 self._data = DEFAULT_SETTINGS.copy()
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self._data, indent=2), encoding="utf-8")
+        temp = self.path.with_suffix(self.path.suffix + ".tmp")
+        temp.write_text(
+            json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        temp.replace(self.path)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
