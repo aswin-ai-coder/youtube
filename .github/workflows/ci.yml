@@ -84,8 +84,8 @@ jobs:
           try:
               from app.ui.android.app import YouTubeDownloaderApp
               print("Android UI imports OK:", YouTubeDownloaderApp.__name__)
-          except BaseException:
-              print("ERROR: Android UI import failed", file=sys.stderr)
+          except BaseException as exc:
+              print(f"ERROR: Android UI import failed: {exc!r}", file=sys.stderr)
               traceback.print_exc()
               raise
           PY
@@ -98,8 +98,7 @@ jobs:
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
-            python -m pytest -q
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python -m pytest -q
 
   desktop-build:
     runs-on: ubuntu-24.04
