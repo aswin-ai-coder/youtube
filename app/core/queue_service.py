@@ -21,8 +21,7 @@ def _normalize_datetime(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        local = _local_now().tzinfo
-        return value.replace(tzinfo=local)
+        return value.replace(tzinfo=_local_now().tzinfo)
     return value.astimezone()
 
 
@@ -69,13 +68,17 @@ class QueueItem:
 class QueueService:
     """Persistent, thread-safe download queue."""
 
-    def __init__(self) -> None:
+    def __init__(self, queue_file: str | Path | None = None) -> None:
         self._queue: deque[QueueItem] = deque()
         self._lock = RLock()
         self.logger = get_logger("queue")
-        self._data_dir = Path.home() / ".local" / "share" / "youtube-downloader"
+        if queue_file is None:
+            self._data_dir = Path.home() / ".local" / "share" / "youtube-downloader"
+            self._queue_file = self._data_dir / "queue.json"
+        else:
+            self._queue_file = Path(queue_file).expanduser()
+            self._data_dir = self._queue_file.parent
         self._data_dir.mkdir(parents=True, exist_ok=True)
-        self._queue_file = self._data_dir / "queue.json"
         self.load_queue()
 
     def save_queue(self) -> None:
