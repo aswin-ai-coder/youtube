@@ -26,8 +26,6 @@ class DownloadServiceProcess:
 
     def run(self) -> None:
         workers = max(1, int(self.settings.get("concurrent_downloads", 2)))
-        idle_since = time.monotonic()
-
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = set()
             while not self.stop_event.is_set():
@@ -40,11 +38,10 @@ class DownloadServiceProcess:
                     self.running.add(item.id)
                     futures.add(pool.submit(self._download, item))
 
-                if futures or self.queue.due_count() > 0:
-                    idle_since = time.monotonic()
-                elif time.monotonic() - idle_since >= 5:
-                    break
-
+                # A foreground service must remain alive while Android owns it.
+                # Do not exit merely because the queue is temporarily empty;
+                # a sticky service may be restarted by Android and would
+                # otherwise loop unnecessarily.
                 time.sleep(0.5)
 
             for future in futures:
@@ -95,7 +92,7 @@ class DownloadServiceProcess:
                 self.queue.update(
                     item.id,
                     speed_text="--",
-                    eta_seconds=None,
+                    eta_seconds=0,
                 )
 
         try:
@@ -111,7 +108,7 @@ class DownloadServiceProcess:
                 progress=100,
                 downloaded_bytes=max(item.downloaded_bytes, item.total_bytes),
                 speed_text="--",
-                eta_seconds=None,
+                eta_seconds=0,
                 error="",
             )
             self.history.add_record(
@@ -129,7 +126,12 @@ class DownloadServiceProcess:
                 if current and current.status in {QueueStatus.PAUSED, QueueStatus.CANCELLED}
                 else QueueStatus.FAILED
             )
-            self.queue.update(item.id, status=status, error=str(exc), eta_seconds=None)
+            self.queue.update(
+                item.id,
+                status=status,
+                error=str(exc),
+                eta_seconds=0,
+            )
             if status == QueueStatus.FAILED:
                 self.history.add_record(
                     title=item.title or item.url,
