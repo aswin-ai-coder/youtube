@@ -45,9 +45,8 @@ jobs:
           PY
       - name: Compile Python sources
         run: python -m compileall -q app main.py service
-      - name: Smoke-test Android UI imports and construction
+      - name: Smoke-test Android UI imports
         env:
-          PYTHONUNBUFFERED: "1"
           KIVY_NO_ARGS: "1"
           KIVY_NO_CONSOLELOG: "1"
           KIVY_WINDOW: "sdl2"
@@ -55,9 +54,8 @@ jobs:
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python - <<'PY'
           import importlib
-          import traceback
-
           modules = (
+              "app.ui.android.app",
               "app.ui.android.widgets.bottom_nav",
               "app.ui.android.widgets.download_panel",
               "app.ui.android.widgets.download_sheet",
@@ -78,32 +76,10 @@ jobs:
           for name in modules:
               importlib.import_module(name)
               print(f"import OK: {name}")
-
-          from app.ui.android.screens.home_screen import HomeScreen
-          from app.ui.android.screens.queue_screen import QueueScreen
-          from app.ui.android.screens.history_screen import HistoryScreen
-          from app.ui.android.screens.favorites_screen import FavoritesScreen
-          from app.ui.android.screens.settings_screen import SettingsScreen
-
-          failures = []
-          for cls in (HomeScreen, QueueScreen, HistoryScreen, FavoritesScreen, SettingsScreen):
-              try:
-                  screen = cls()
-                  print(f"construction OK: {cls.__name__}")
-                  event = getattr(screen, "_refresh_event", None)
-                  if event is not None:
-                      event.cancel()
-                  clipboard = getattr(screen, "clipboard", None)
-                  if clipboard is not None:
-                      clipboard.shutdown()
-              except BaseException as exc:
-                  print(f"construction FAILED: {cls.__name__}: {exc!r}")
-                  traceback.print_exc()
-                  failures.append(cls.__name__)
-
-          if failures:
-              raise SystemExit("Android screen construction failures: " + ", ".join(failures))
-          print("Android UI smoke checks OK")
+          from app.ui.android.app import YouTubeDownloaderApp
+          app = YouTubeDownloaderApp()
+          assert app.build() is not None
+          print("Android app build object OK")
           PY
       - name: Run tests
         env:
