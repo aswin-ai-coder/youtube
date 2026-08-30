@@ -153,12 +153,18 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev pkg-config python3-dev
+          sudo apt-get install -y \
+            libcairo2-dev pkg-config python3-dev \
+            libmtdev-dev
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install pyinstaller
 
       - name: Build desktop executable
+        env:
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "1"
+          KIVY_WINDOW: "mock"
+          KIVY_GL_BACKEND: "mock"
         run: python -m PyInstaller --clean --noconfirm youtube_downloader.spec
 
       - name: Upload desktop artifact
@@ -243,6 +249,7 @@ jobs:
       - name: Build Android debug APK
         env:
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
+          BUILDOZER_MESON_SKIP_SANITY_CHECK: "1"
         run: |
           yes | buildozer android debug
 
