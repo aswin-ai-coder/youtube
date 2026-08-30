@@ -43,6 +43,10 @@ class QueueItem:
     playlist: bool = False
     playlist_items: list[str] = field(default_factory=list)
     scheduled_at: datetime | None = None
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    speed_text: str = "--"
+    eta_seconds: int | None = None
 
     def __post_init__(self) -> None:
         if self.audio_only:
@@ -110,10 +114,13 @@ class QueueService:
                     raw["kind"] = DownloadKind(
                         raw.get("kind", DownloadKind.VIDEO_AUDIO.value)
                     )
-                    # Forward-compatible loading for queues created by older builds.
                     raw.setdefault("embed_thumbnail", True)
                     raw.setdefault("embed_metadata", True)
                     raw.setdefault("thumbnail_url", None)
+                    raw.setdefault("downloaded_bytes", 0)
+                    raw.setdefault("total_bytes", 0)
+                    raw.setdefault("speed_text", "--")
+                    raw.setdefault("eta_seconds", None)
                     item = QueueItem(**raw)
                     if item.status == QueueStatus.RUNNING:
                         item.status = QueueStatus.QUEUED
@@ -165,6 +172,10 @@ class QueueService:
         error: str | None = None,
         title: str | None = None,
         thumbnail_url: str | None = None,
+        downloaded_bytes: int | None = None,
+        total_bytes: int | None = None,
+        speed_text: str | None = None,
+        eta_seconds: int | None = None,
     ) -> QueueItem | None:
         with self._lock:
             item = self.get(item_id)
@@ -180,6 +191,14 @@ class QueueService:
                 item.title = title
             if thumbnail_url is not None:
                 item.thumbnail_url = thumbnail_url
+            if downloaded_bytes is not None:
+                item.downloaded_bytes = max(0, int(downloaded_bytes))
+            if total_bytes is not None:
+                item.total_bytes = max(0, int(total_bytes))
+            if speed_text is not None:
+                item.speed_text = speed_text
+            if eta_seconds is not None:
+                item.eta_seconds = max(0, int(eta_seconds))
         self.save_queue()
         return item
 
@@ -193,6 +212,10 @@ class QueueService:
             }:
                 return False
             item.status, item.progress, item.error = QueueStatus.QUEUED, 0, None
+            item.downloaded_bytes = 0
+            item.total_bytes = 0
+            item.speed_text = "--"
+            item.eta_seconds = None
         self.save_queue()
         return True
 
