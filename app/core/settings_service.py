@@ -4,8 +4,8 @@ from typing import Any
 
 
 DEFAULT_SETTINGS: dict[str, Any] = {
-    "theme": "dark",
-    "accent_color": "#2563eb",
+    "theme": "Dark",
+    "accent_color": "Blue",
     "language": "en",
     "download_folder": str(Path.home() / "Downloads" / "YouTube Downloader"),
     "filename_template": "%(title)s.%(ext)s",
@@ -15,7 +15,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "ffmpeg_path": "",
     "update_channel": "stable",
     "notifications": True,
-    "clipboard_monitoring": True,
+    "clipboard_monitor": True,
     "window_geometry": "",
     "splitter_sizes": [],
 }
