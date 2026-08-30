@@ -4,6 +4,7 @@ import traceback
 
 from kivy.clock import Clock
 from kivy.metrics import dp
+from kivy.utils import platform
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
@@ -12,7 +13,7 @@ from kivy.uix.screenmanager import SlideTransition
 
 
 class YouTubeDownloaderApp(MDApp):
-    """Android application entry point with safe first-frame startup."""
+    """Android application entry point with safe startup and runtime permissions."""
 
     def build(self):
         self.title = "YouTube Downloader"
@@ -23,9 +24,8 @@ class YouTubeDownloaderApp(MDApp):
         return self._root
 
     def on_start(self):
-        # python-for-android's SDL2 bootstrap owns the Android loading screen.
-        # Dismiss it explicitly once the Kivy window is alive.
         self._hide_android_loading_screen()
+        self._request_android_permissions()
         Clock.schedule_once(self._initialize_ui, 0)
 
     def _hide_android_loading_screen(self, *_args):
@@ -33,8 +33,23 @@ class YouTubeDownloaderApp(MDApp):
             from android import loadingscreen
             loadingscreen.hide_loading_screen()
         except (ImportError, AttributeError, RuntimeError):
-            # The Android bootstrap may already have removed the screen, or
-            # this method may be running on desktop. Neither is an error.
+            pass
+
+    def _request_android_permissions(self):
+        if platform != "android":
+            return
+        try:
+            from android.permissions import Permission, check_permission, request_permissions
+
+            notification_permission = getattr(
+                Permission,
+                "POST_NOTIFICATIONS",
+                "android.permission.POST_NOTIFICATIONS",
+            )
+            if not check_permission(notification_permission):
+                request_permissions([notification_permission])
+        except Exception:
+            # Permission prompts are best-effort; the app can still run without them.
             pass
 
     def _initialize_ui(self, *_args):
