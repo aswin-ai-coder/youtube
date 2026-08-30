@@ -21,7 +21,6 @@ from app.core.youtube_service import YouTubeService
 from app.ui.android.android_queue_item_factory import AndroidQueueItemFactory
 from app.ui.android.widgets.download_panel import DownloadPanel
 from app.ui.android.widgets.playlist_dialog import PlaylistDialog
-from app.ui.android.widgets.playlist_progress import PlaylistProgress
 from app.ui.android.widgets.url_bar import UrlBar
 from app.ui.android.widgets.video_card import VideoCard
 from app.utils.helpers import format_duration, format_number
@@ -54,11 +53,10 @@ class HomeScreen(MDScreen):
         self.url_bar = UrlBar()
         self.video_card = VideoCard()
         self.download_panel = DownloadPanel()
-        self.playlist_progress = PlaylistProgress(opacity=0)
         self.video_card.favorite_button.bind(on_release=self.favorite_video)
         self.url_bar.analyze_button.bind(on_release=self.analyze)
         self.download_panel.download_button.bind(on_release=self.download)
-        for widget in (self.url_bar, self.video_card, self.download_panel, self.playlist_progress):
+        for widget in (self.url_bar, self.video_card, self.download_panel):
             content.add_widget(widget)
         scroll.add_widget(content)
         root.add_widget(scroll)
@@ -108,11 +106,8 @@ class HomeScreen(MDScreen):
     def playlist_selected(self, videos):
         if not videos:
             return
-        self.playlist_total = len(videos)
-        self.playlist_progress.opacity = 1
         for video in videos:
             self._enqueue(self.factory.build(video["url"], video["title"]))
-        self.playlist_progress.opacity = 0
 
     def download(self, *args):
         if self.metadata is None:
