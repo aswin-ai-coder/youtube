@@ -1,4 +1,4 @@
-"""Background downloader service entrypoint for python-for-android."""
+"""Foreground downloader service entrypoint for python-for-android."""
 
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -7,7 +7,7 @@ from threading import Event, Lock
 
 from app.core.download_engine import DownloadEngine
 from app.core.history_service import HistoryService
-from app.core.models import DownloadOptions, QueueStatus
+from app.core.models import QueueStatus
 from app.core.queue_service import QueueItem, QueueService
 from app.core.settings_service import SettingsService
 
@@ -61,18 +61,49 @@ class DownloadServiceProcess:
             current = self.queue.get(item.id)
             if not current or current.status in {QueueStatus.PAUSED, QueueStatus.CANCELLED}:
                 raise RuntimeError("Download stopped")
+
             if data.get("status") == "downloading":
                 downloaded = int(data.get("downloaded_bytes") or 0)
-                total = int(data.get("total_bytes") or data.get("total_bytes_estimate") or 0)
-                progress = int(downloaded * 100 / total) if total else 0
-                self.queue.update(item.id, status=QueueStatus.RUNNING, progress=progress)
+                total = int(
+                    data.get("total_bytes")
+                    or data.get("total_bytes_estimate")
+                    or 0
+                )
+                progress = min(100, int(downloaded * 100 / total)) if total else 0
+                speed = float(data.get("speed") or 0)
+                eta = data.get("eta")
+                speed_text = f"{speed / 1024 / 1024:.2f} MB/s" if speed else "--"
+                self.queue.update(
+                    item.id,
+                    status=QueueStatus.RUNNING,
+                    progress=progress,
+                    downloaded_bytes=downloaded,
+                    total_bytes=total,
+                    speed_text=speed_text,
+                    eta_seconds=int(eta) if eta is not None else None,
+                )
+            elif data.get("status") == "finished":
+                self.queue.update(
+                    item.id,
+                    speed_text="--",
+                    eta_seconds=None,
+                )
 
         try:
             current = self.queue.get(item.id)
             if not current or current.status != QueueStatus.RUNNING:
                 return
-            result = self.engine.download(self._options(item), hook)
-            self.queue.update(item.id, status=QueueStatus.COMPLETED, progress=100, error="")
+            options = self._options(item)
+            result = self.engine.download(options, hook)
+            self.queue.update(
+                item.id,
+                status=QueueStatus.COMPLETED,
+                progress=100,
+                downloaded_bytes=max(item.downloaded_bytes, item.total_bytes),
+                speed_text="--",
+                eta_seconds=None,
+                error="",
+            )
             self.history.add_record(
                 title=item.title or item.url,
                 url=item.url,
@@ -83,8 +114,12 @@ class DownloadServiceProcess:
             self._notify("Download complete", item.title or item.url)
         except Exception as exc:
             current = self.queue.get(item.id)
-            status = current.status if current and current.status in {QueueStatus.PAUSED, QueueStatus.CANCELLED} else QueueStatus.FAILED
-            self.queue.update(item.id, status=status, error=str(exc))
+            status = (
+                current.status
+                if current and current.status in {QueueStatus.PAUSED, QueueStatus.CANCELLED}
+                else QueueStatus.FAILED
+            )
+            self.queue.update(item.id, status=status, error=str(exc), eta_seconds=None)
             if status == QueueStatus.FAILED:
                 self.history.add_record(
                     title=item.title or item.url,
@@ -98,7 +133,9 @@ class DownloadServiceProcess:
             with self.lock:
                 self.running.discard(item.id)
 
-    def _options(self, item: QueueItem) -> DownloadOptions:
+    def _options(self, item: QueueItem):
+        from app.core.models import DownloadOptions
+
         return DownloadOptions(
             url=item.url,
             output_dir=Path(item.output_dir),
@@ -130,8 +167,7 @@ class DownloadServiceProcess:
             return
         try:
             from app.core.notification_service import NotificationService
-
-            NotificationService().notify(title, message)
+            NotificationService().show(title, message)
         except Exception:
             pass
 
