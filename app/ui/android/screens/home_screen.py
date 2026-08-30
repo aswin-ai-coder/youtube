@@ -91,6 +91,11 @@ class HomeScreen(MDScreen):
         if self.settings.get("clipboard_monitor", True):
             self.clipboard = ClipboardService(self.clipboard_detected)
 
+        # Resume queued/scheduled downloads after an app restart while the
+        # Android activity is in the foreground and can legally start the FGS.
+        if self.queue.due_count() > 0:
+            Clock.schedule_once(lambda _dt: self.coordinator.start_available(), 0)
+
     def analyze(self, *args):
         url = self.url_bar.url_input.text.strip()
         if not url:
@@ -171,7 +176,11 @@ class HomeScreen(MDScreen):
         self.queue_cards[item.id] = card
 
         self.coordinator.add(item)
-        self.notifications.show("Downloading", item.title or "Download")
+        if self.settings.get("notifications", True):
+            self.notifications.show(
+                "Downloading",
+                item.title or "Download",
+            )
 
     def update_progress(self, item_id, value):
         Clock.schedule_once(
