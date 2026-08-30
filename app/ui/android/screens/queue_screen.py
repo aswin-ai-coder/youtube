@@ -1,6 +1,8 @@
 from kivy.metrics import dp
+from kivy.app import App
 
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDLabel
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.scrollview import MDScrollView
 
@@ -24,8 +26,6 @@ class QueueScreen(MDScreen):
         self.add_widget(scroll)
 
     def on_pre_enter(self):
-        from kivy.app import App
-
         app = App.get_running_app()
         if not hasattr(app, "sm") or "home" not in app.sm.screen_names:
             return
@@ -36,9 +36,8 @@ class QueueScreen(MDScreen):
             return
 
         for item in home.queue.list_items():
-            if item.id in self.cards:
-                card = self.cards[item.id]
-            else:
+            card = self.cards.get(item.id)
+            if card is None:
                 card = self.add_download(
                     item.id,
                     item.title or "Download",
@@ -49,19 +48,14 @@ class QueueScreen(MDScreen):
                     },
                 )
 
+            home.queue_cards[item.id] = card
             card.update_progress(item.progress)
-            if item.status.value == "queued":
-                card.update_status("Queued")
-            elif item.status.value == "running":
-                card.update_status("Downloading")
-            elif item.status.value == "paused":
-                card.update_status("Paused")
-            elif item.status.value == "completed":
-                card.update_status("Completed")
-            elif item.status.value == "failed":
-                card.update_status("Failed")
-            elif item.status.value == "cancelled":
-                card.update_status("Cancelled")
+            card.update_status(self._status_text(item.status.value))
+            card.update_speed(item.speed_text or "--")
+            downloaded = self._format_size(item.downloaded_bytes)
+            total = self._format_size(item.total_bytes) if item.total_bytes else "--"
+            card.update_size(downloaded, total)
+            card.update_eta("--" if item.eta_seconds is None else f"{item.eta_seconds}s")
 
     def add_download(self, item_id, title, callbacks):
         existing = self.cards.get(item_id)
@@ -72,3 +66,26 @@ class QueueScreen(MDScreen):
         self.cards[item_id] = card
         self.container.add_widget(card)
         return card
+
+    @staticmethod
+    def _status_text(status: str) -> str:
+        return {
+            "queued": "Queued",
+            "scheduled": "Scheduled",
+            "running": "Downloading",
+            "paused": "Paused",
+            "completed": "Completed",
+            "failed": "Failed",
+            "cancelled": "Cancelled",
+        }.get(status, status.title())
+
+    @staticmethod
+    def _format_size(value: int) -> str:
+        if value <= 0:
+            return "0 B"
+        size = float(value)
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if size < 1024 or unit == "TB":
+                return f"{int(size)} B" if unit == "B" else f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} TB"
