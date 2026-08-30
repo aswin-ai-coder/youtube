@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from pathlib import Path
-from threading import Lock, Thread
+import time
+from threading import Event as ThreadEvent, Lock, Thread
 from typing import Callable
 
-from app.core.download_engine import DownloadEngine
-from app.core.models import DownloadOptions, QueueStatus
-from app.core.queue_service import QueueItem, QueueService
+from app.core.android_service_launcher import AndroidServiceLauncher
+from app.core.models import QueueStatus
+from app.core.queue_service import QueueService
 
 
 class Event:
+    """Tiny callback event used so the Android layer has no Qt dependency."""
+
     def __init__(self) -> None:
         self._callbacks: list[Callable] = []
 
@@ -21,18 +23,17 @@ class Event:
             try:
                 callback(*args)
             except Exception:
+                # A stale UI callback must never kill the queue monitor.
                 pass
 
 
 class AndroidDownloadCoordinator:
-    """Kivy-safe download coordinator with no Qt dependency."""
+    """Android queue facade backed by a python-for-android foreground service."""
 
     def __init__(self, queue: QueueService, settings) -> None:
         self.queue = queue
         self.settings = settings
-        self.engine = DownloadEngine()
-        self.workers: dict[str, Thread] = {}
-        self.cancelled: set[str] = set()
+        self.service = AndroidServiceLauncher()
         self.lock = Lock()
         self.queue_changed = Event()
         self.progress_changed = Event()
@@ -42,105 +43,124 @@ class AndroidDownloadCoordinator:
         self.speed_changed = Event()
         self.size_changed = Event()
         self.eta_changed = Event()
+        self._stop_monitor = ThreadEvent()
+        self._seen_terminal: set[str] = set()
+        self._last_state: dict[str, tuple] = {}
+        self._monitor = Thread(target=self._monitor_queue, daemon=True)
+        self._monitor.start()
 
-    def add(self, item: QueueItem) -> None:
+    def add(self, item) -> None:
         self.queue.enqueue(item)
         self.queue_changed.emit()
         self.start_available()
 
     def start_available(self) -> None:
-        limit = max(1, int(self.settings.get("concurrent_downloads", 2)))
-        with self.lock:
-            active = len(self.workers)
-        while active < limit:
-            item = self.queue.dequeue()
-            if item is None:
-                break
-            thread = Thread(target=self._run_item, args=(item,), daemon=True)
-            with self.lock:
-                self.workers[item.id] = thread
-            thread.start()
-            active += 1
+        # The foreground service owns the actual workers. Keeping this call
+        # idempotent makes the UI safe to call after every enqueue/resume.
+        self.service.start()
         self.queue_changed.emit()
 
-    def _run_item(self, item: QueueItem) -> None:
-        def hook(data):
-            if item.id in self.cancelled:
-                raise RuntimeError("Download cancelled")
-            status = data.get("status")
-            if status == "downloading":
-                downloaded = data.get("downloaded_bytes", 0) or 0
-                total = data.get("total_bytes") or data.get("total_bytes_estimate") or 0
-                progress = min(100, int(downloaded * 100 / total)) if total else 0
-                self.queue.update(item.id, status=QueueStatus.RUNNING, progress=progress)
-                self.progress_changed.emit(item.id, progress)
-                speed = data.get("speed") or 0
-                eta = data.get("eta") or 0
-                self.speed_changed.emit(item.id, f"{speed / 1024 / 1024:.2f} MB/s" if speed else "--")
-                self.size_changed.emit(item.id, f"{downloaded / 1024 / 1024:.1f} MB", f"{total / 1024 / 1024:.1f} MB" if total else "--")
-                self.eta_changed.emit(item.id, f"{eta}s" if eta else "--")
-                self.status_changed.emit(item.id, "Downloading")
-            elif status == "finished":
-                self.status_changed.emit(item.id, "Finalizing...")
+    def _monitor_queue(self) -> None:
+        while not self._stop_monitor.is_set():
+            try:
+                items = self.queue.list_items()
+                current_ids = set()
+                for item in items:
+                    current_ids.add(item.id)
+                    state = (
+                        item.status,
+                        item.progress,
+                        item.downloaded_bytes,
+                        item.total_bytes,
+                        item.speed_text,
+                        item.eta_seconds,
+                        item.error,
+                    )
+                    if self._last_state.get(item.id) == state:
+                        continue
+                    self._last_state[item.id] = state
+                    self._emit_item_state(item)
 
-        try:
-            options = self._options(item)
-            self.engine.download(options, hook)
-            self.queue.update(item.id, status=QueueStatus.COMPLETED, progress=100)
-            self.completed.emit(item.id, str(options.output_dir))
-        except Exception as exc:
-            status = QueueStatus.CANCELLED if item.id in self.cancelled else QueueStatus.FAILED
-            self.queue.update(item.id, status=status, error=str(exc))
-            if status == QueueStatus.FAILED:
-                self.failed.emit(item.id, str(exc))
-        finally:
-            with self.lock:
-                self.workers.pop(item.id, None)
-                self.cancelled.discard(item.id)
-            self.queue_changed.emit()
-            self.start_available()
+                # Drop stale snapshots after an item is removed.
+                for item_id in set(self._last_state) - current_ids:
+                    self._last_state.pop(item_id, None)
+                    self._seen_terminal.discard(item_id)
+            except Exception:
+                pass
+            self._stop_monitor.wait(0.25)
 
-    def _options(self, item: QueueItem) -> DownloadOptions:
-        return DownloadOptions(
-            url=item.url,
-            output_dir=Path(item.output_dir),
-            kind=item.kind,
-            quality=item.quality,
-            audio_bitrate=item.audio_bitrate,
-            audio_codec=item.audio_codec,
-            video_codec=item.video_codec,
-            container=item.container,
-            filename_template=item.filename_template,
-            subtitle_languages=item.subtitle_languages,
-            write_subtitles=item.write_subtitles,
-            write_auto_subtitles=item.write_auto_subtitles,
-            translate_subtitles=item.translate_subtitles,
-            translation_language=item.translation_language,
-            subtitle_format=item.subtitle_format,
-            embed_subtitles=item.embed_subtitles,
-            embed_thumbnail=item.embed_thumbnail if hasattr(item, "embed_thumbnail") else True,
-            embed_metadata=item.embed_metadata if hasattr(item, "embed_metadata") else True,
-            playlist=item.playlist,
-            playlist_items=item.playlist_items,
-            max_retries=int(self.settings.get("max_retries", 10)),
-            concurrent_fragments=int(self.settings.get("concurrent_fragments", 4)),
-            ffmpeg_path=self.settings.get("ffmpeg_path") or None,
-        )
+    def _emit_item_state(self, item) -> None:
+        self.progress_changed.emit(item.id, item.progress)
+        self.status_changed.emit(item.id, self._status_text(item))
+        self.speed_changed.emit(item.id, item.speed_text or "--")
+        downloaded = self._format_size(item.downloaded_bytes)
+        total = self._format_size(item.total_bytes) if item.total_bytes else "--"
+        self.size_changed.emit(item.id, downloaded, total)
+        eta = "--" if item.eta_seconds is None else f"{item.eta_seconds}s"
+        self.eta_changed.emit(item.id, eta)
+
+        if item.status == QueueStatus.COMPLETED and item.id not in self._seen_terminal:
+            self._seen_terminal.add(item.id)
+            self.completed.emit(item.id, item.output_dir)
+        elif item.status == QueueStatus.FAILED and item.id not in self._seen_terminal:
+            self._seen_terminal.add(item.id)
+            self.failed.emit(item.id, item.error or "Download failed")
+        elif item.status not in {
+            QueueStatus.COMPLETED,
+            QueueStatus.FAILED,
+        }:
+            self._seen_terminal.discard(item.id)
+
+    @staticmethod
+    def _status_text(item) -> str:
+        mapping = {
+            QueueStatus.QUEUED: "Queued",
+            QueueStatus.SCHEDULED: "Scheduled",
+            QueueStatus.RUNNING: "Downloading",
+            QueueStatus.PAUSED: "Paused",
+            QueueStatus.COMPLETED: "Completed",
+            QueueStatus.FAILED: "Failed",
+            QueueStatus.CANCELLED: "Cancelled",
+        }
+        return mapping.get(item.status, str(item.status))
+
+    @staticmethod
+    def _format_size(value: int) -> str:
+        if value <= 0:
+            return "0 B"
+        units = ("B", "KB", "MB", "GB", "TB")
+        size = float(value)
+        for unit in units:
+            if size < 1024 or unit == units[-1]:
+                return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
+            size /= 1024
+        return f"{size:.1f} TB"
 
     def pause(self, item_id: str) -> None:
-        self.cancel(item_id, QueueStatus.PAUSED)
+        item = self.queue.get(item_id)
+        if not item:
+            return
+        self.queue.update(item_id, status=QueueStatus.PAUSED)
+        self.queue_changed.emit()
+        self.start_available()
 
     def cancel(self, item_id: str, final_status: QueueStatus = QueueStatus.CANCELLED) -> None:
-        self.cancelled.add(item_id)
-        item = self.queue.get(item_id)
-        if item and not self.workers.get(item_id):
-            self.queue.update(item_id, status=final_status)
+        if self.queue.get(item_id):
+            self.queue.update(item_id, status=final_status, error="" if final_status == QueueStatus.CANCELLED else None)
         self.queue_changed.emit()
 
     def resume(self, item_id: str) -> None:
         if self.queue.get(item_id):
-            self.cancelled.discard(item_id)
-            self.queue.update(item_id, status=QueueStatus.QUEUED, progress=0, error=None)
+            self.queue.update(
+                item_id,
+                status=QueueStatus.QUEUED,
+                progress=0,
+                error=None,
+                downloaded_bytes=0,
+                total_bytes=0,
+                speed_text="--",
+                eta_seconds=None,
+            )
             self.start_available()
 
     def retry(self, item_id: str) -> None:
@@ -157,5 +177,7 @@ class AndroidDownloadCoordinator:
             self.queue_changed.emit()
 
     def shutdown(self) -> None:
-        for item_id in list(self.workers):
-            self.cancel(item_id)
+        # Do not stop the foreground service here: the service is what keeps
+        # downloads alive when Android backgrounds or kills the UI process.
+        self._stop_monitor.set()
+        self._monitor.join(timeout=1.0)
