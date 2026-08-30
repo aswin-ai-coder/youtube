@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from app.utils.logger import get_logger
+
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from app.core.download_service import DownloadWorker
 from app.core.models import DownloadOptions, QueueStatus
 from app.core.queue_service import QueueItem, QueueService
+from app.utils.logger import get_logger
 
 
 class DownloadCoordinator(QObject):
@@ -38,7 +39,7 @@ class DownloadCoordinator(QObject):
         self.start_available()
 
     def start_available(self) -> None:
-        limit = int(self.settings.get("concurrent_downloads", 2))
+        limit = max(1, int(self.settings.get("concurrent_downloads", 2)))
         while len(self.workers) < limit and self.queue.due_count() > 0:
             item = self.queue.dequeue()
             if item is None:
@@ -47,19 +48,26 @@ class DownloadCoordinator(QObject):
         self.queue_changed.emit()
 
     def pause(self, item_id: str) -> None:
-        item = self.queue.update(item_id, status=QueueStatus.PAUSED)
+        item = self.queue.get(item_id)
+        if not item or item.status in {QueueStatus.COMPLETED, QueueStatus.CANCELLED}:
+            return
+        self.queue.update(item_id, status=QueueStatus.PAUSED, error=None)
         worker = self.workers.get(item_id)
         if worker:
             worker.stop()
-        if item:
-            item.error = None
         self.queue_changed.emit()
 
     def resume(self, item_id: str) -> None:
-        self.queue.update(item_id, status=QueueStatus.QUEUED, error="")
+        item = self.queue.get(item_id)
+        if not item or item.status != QueueStatus.PAUSED:
+            return
+        self.queue.update(item_id, status=QueueStatus.QUEUED, progress=0, error=None)
         self.start_available()
 
     def cancel(self, item_id: str) -> None:
+        item = self.queue.get(item_id)
+        if not item or item.status in {QueueStatus.COMPLETED, QueueStatus.CANCELLED}:
+            return
         self.queue.update(item_id, status=QueueStatus.CANCELLED)
         worker = self.workers.get(item_id)
         if worker:
@@ -72,7 +80,9 @@ class DownloadCoordinator(QObject):
             self.queue_changed.emit()
 
     def remove(self, item_id: str) -> None:
-        self.cancel(item_id)
+        item = self.queue.get(item_id)
+        if not item or item.status == QueueStatus.RUNNING:
+            return
         self.queue.remove(item_id)
         self.queue_changed.emit()
 
@@ -84,28 +94,13 @@ class DownloadCoordinator(QObject):
         self.logger.info(f"Starting download: {item.url}")
         worker = DownloadWorker(options=self._options(item))
         self.workers[item.id] = worker
-        worker.progress.connect(
-            lambda value, item_id=item.id: self._progress(item_id, value)
-        )
+        worker.progress.connect(lambda value, item_id=item.id: self._progress(item_id, value))
         worker.status.connect(self.status_changed.emit)
-
-        worker.speed.connect(
-            self.speed_changed.emit
-        )
-
-        worker.size.connect(
-            self.size_changed.emit
-        )
-
-        worker.eta.connect(
-            self.eta_changed.emit
-        )
-        worker.finished.connect(
-            lambda output, item_id=item.id: self._finished(item_id, output)
-        )
-        worker.error.connect(
-            lambda message, item_id=item.id: self._error(item_id, message)
-        )
+        worker.speed.connect(self.speed_changed.emit)
+        worker.size.connect(self.size_changed.emit)
+        worker.eta.connect(self.eta_changed.emit)
+        worker.finished.connect(lambda output, item_id=item.id: self._finished(item_id, output))
+        worker.error.connect(lambda message, item_id=item.id: self._error(item_id, message))
         worker.start()
 
     def _options(self, item: QueueItem) -> DownloadOptions:
@@ -126,6 +121,8 @@ class DownloadCoordinator(QObject):
             translation_language=item.translation_language,
             subtitle_format=item.subtitle_format,
             embed_subtitles=item.embed_subtitles,
+            embed_thumbnail=item.embed_thumbnail,
+            embed_metadata=item.embed_metadata,
             playlist=item.playlist,
             playlist_items=item.playlist_items,
             max_retries=int(self.settings.get("max_retries", 10)),
@@ -140,73 +137,33 @@ class DownloadCoordinator(QObject):
 
     def _finished(self, item_id: str, output: str) -> None:
         self.workers.pop(item_id, None)
-
-        item = self.queue.update(
-            item_id,
-            status=QueueStatus.COMPLETED,
-            progress=100,
-        )
-
+        item = self.queue.update(item_id, status=QueueStatus.COMPLETED, progress=100, error=None)
         if item:
-            self.logger.info(
-                f"Download completed: {item.title or item.url}"
-            )
-
+            self.logger.info(f"Download completed: {item.title or item.url}")
         self.completed.emit(item_id, output)
-
         self.queue_changed.emit()
-
         self.start_available()
 
     def _error(self, item_id: str, message: str) -> None:
         self.workers.pop(item_id, None)
-
         item = self.queue.get(item_id)
-
-        if item and item.status in {
-            QueueStatus.PAUSED,
-            QueueStatus.CANCELLED,
-        }:
-            self.logger.warning(
-                f"Download stopped: {item.title or item.url}"
-            )
-
+        if item and item.status in {QueueStatus.PAUSED, QueueStatus.CANCELLED}:
+            self.logger.warning(f"Download stopped: {item.title or item.url}")
             self.queue_changed.emit()
-
             self.start_available()
-
             return
-
-        self.queue.update(
-            item_id,
-            status=QueueStatus.FAILED,
-            error=message,
-        )
-
+        self.queue.update(item_id, status=QueueStatus.FAILED, error=message)
         if item:
-            self.logger.error(
-                f"Download failed: {item.title or item.url} | {message}"
-            )
-
+            self.logger.error(f"Download failed: {item.title or item.url} | {message}")
         self.failed.emit(item_id, message)
-
         self.queue_changed.emit()
-
         self.start_available()
 
     def shutdown(self) -> None:
-        """
-        Stop all active download workers before the application exits.
-        """
-
         self.logger.info("Stopping active download workers...")
-
         self.timer.stop()
-
         for worker in list(self.workers.values()):
             worker.stop()
             worker.wait()
-
         self.workers.clear()
-
         self.logger.info("All download workers stopped.")
