@@ -37,7 +37,7 @@ python -m compileall -q app main.py service
 
 ## CI
 
-GitHub Actions validates Python tests and compilation, Android UI imports, the desktop executable build, and the Android debug APK build.
+GitHub Actions validates Python tests and compilation, Android UI imports and screen construction, the desktop executable build, and the Android debug APK build.
 
 ## Notes
 
