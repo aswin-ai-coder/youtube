@@ -7,7 +7,7 @@ from threading import Event, Lock
 
 from app.core.download_engine import DownloadEngine
 from app.core.history_service import HistoryService
-from app.core.models import QueueStatus
+from app.core.models import DownloadOptions, QueueStatus
 from app.core.queue_service import QueueItem, QueueService
 from app.core.settings_service import SettingsService
 
@@ -26,16 +26,25 @@ class DownloadServiceProcess:
 
     def run(self) -> None:
         workers = max(1, int(self.settings.get("concurrent_downloads", 2)))
+        idle_since = time.monotonic()
+
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = set()
             while not self.stop_event.is_set():
                 self._reap(futures)
+
                 while len(futures) < workers:
                     item = self.queue.dequeue()
                     if item is None:
                         break
                     self.running.add(item.id)
                     futures.add(pool.submit(self._download, item))
+
+                if futures or self.queue.due_count() > 0:
+                    idle_since = time.monotonic()
+                elif time.monotonic() - idle_since >= 5:
+                    break
+
                 time.sleep(0.5)
 
             for future in futures:
@@ -93,6 +102,7 @@ class DownloadServiceProcess:
             current = self.queue.get(item.id)
             if not current or current.status != QueueStatus.RUNNING:
                 return
+
             options = self._options(item)
             result = self.engine.download(options, hook)
             self.queue.update(
@@ -133,9 +143,7 @@ class DownloadServiceProcess:
             with self.lock:
                 self.running.discard(item.id)
 
-    def _options(self, item: QueueItem):
-        from app.core.models import DownloadOptions
-
+    def _options(self, item: QueueItem) -> DownloadOptions:
         return DownloadOptions(
             url=item.url,
             output_dir=Path(item.output_dir),
