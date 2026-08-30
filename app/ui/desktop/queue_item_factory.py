@@ -27,6 +27,14 @@ class QueueItemFactory:
             if force_playlist is not None
             else self.window.playlist_box.currentText() != "Single video"
         )
+        selected_mode = self.window.playlist_box.currentText() == "Selected videos"
+        playlist_items = (
+            self._selected_playlist_items(playlist, allow_playlist_prompt)
+            if playlist_enabled
+            else []
+        )
+        if selected_mode and allow_playlist_prompt and playlist.entries and not playlist_items:
+            return None
         return QueueItem(
             url=url,
             output_dir=self.window.folder_input.text(),
@@ -37,25 +45,18 @@ class QueueItemFactory:
             audio_bitrate=self.window.audio_bitrate_box.currentText(),
             video_codec=self.window.video_codec_box.currentText(),
             container=self.window.container_box.currentText(),
-            filename_template=self.window.filename_input.text().strip()
-            or "%(title)s.%(ext)s",
+            filename_template=self.window.filename_input.text().strip() or "%(title)s.%(ext)s",
             subtitle_languages=self._subtitle_languages(),
-            write_subtitles=(
-                write_subtitles
-                if write_subtitles is not None
-                else bool(self._subtitle_languages())
-            ),
+            write_subtitles=(write_subtitles if write_subtitles is not None else bool(self._subtitle_languages())),
             write_auto_subtitles=self.window.auto_subs.isChecked(),
             translate_subtitles=self.window.translate_subs.isChecked(),
             translation_language=self.window.translation_lang.currentText(),
             subtitle_format=self.window.subtitle_format.currentText(),
             embed_subtitles=self.window.embed_subs.isChecked(),
+            embed_thumbnail=self.window.embed_thumbnail.isChecked(),
+            embed_metadata=self.window.embed_metadata.isChecked(),
             playlist=playlist_enabled,
-            playlist_items=(
-                self._selected_playlist_items(playlist, allow_playlist_prompt)
-                if playlist_enabled
-                else []
-            ),
+            playlist_items=playlist_items,
             scheduled_at=scheduled_at,
         )
 
@@ -71,9 +72,7 @@ class QueueItemFactory:
         subtitle = self.window.subtitle_box.currentText()
         return [] if subtitle == "None" else [subtitle]
 
-    def _selected_playlist_items(
-        self, playlist: PlaylistMetadata, allow_prompt: bool
-    ) -> list[str]:
+    def _selected_playlist_items(self, playlist: PlaylistMetadata, allow_prompt: bool) -> list[str]:
         if self.window.playlist_box.currentText() != "Selected videos":
             return []
         entries = playlist.entries or []
