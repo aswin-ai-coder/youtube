@@ -72,6 +72,27 @@ def test_queue_updates_and_reorders(tmp_path):
     assert queue.get(first.id).progress == 55
 
 
+def test_queue_instances_share_latest_file_state(tmp_path):
+    queue_path = tmp_path / "queue.json"
+    ui_queue = QueueService(queue_path)
+    service_queue = QueueService(queue_path)
+
+    item = ui_queue.enqueue(QueueItem(url="shared", output_dir=str(tmp_path)))
+    visible = service_queue.list_items()
+    assert [entry.id for entry in visible] == [item.id]
+
+    dequeued = service_queue.dequeue()
+    assert dequeued is not None
+    assert dequeued.id == item.id
+    assert ui_queue.get(item.id).status == QueueStatus.RUNNING
+
+    ui_queue.update(item.id, status=QueueStatus.PAUSED)
+    assert service_queue.get(item.id).status == QueueStatus.PAUSED
+
+    assert service_queue.retry(item.id) is True
+    assert ui_queue.get(item.id).status == QueueStatus.QUEUED
+
+
 def test_queue_restores_and_normalizes_scheduled_time(tmp_path):
     queue_path = tmp_path / "queue.json"
     queue = QueueService(queue_path)
