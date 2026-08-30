@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
@@ -22,11 +23,23 @@ class DownloadWorker(QThread):
     finished = Signal(str)
     error = Signal(str)
 
-    def __init__(self, *, options: DownloadOptions | None = None, url: str = "", output_dir: str = "", audio_only: bool = False, quality: str = "Best", audio_codec: str = "mp3", audio_bitrate: str = "320", container: str = "mp4", filename_template: str = "%(title)s.%(ext)s") -> None:
+    def __init__(
+        self,
+        *,
+        options: DownloadOptions | None = None,
+        url: str = "",
+        output_dir: str = "",
+        audio_only: bool = False,
+        quality: str = "Best",
+        audio_codec: str = "mp3",
+        audio_bitrate: str = "320",
+        container: str = "mp4",
+        filename_template: str = "%(title)s.%(ext)s",
+    ) -> None:
         super().__init__()
         self.options = options or DownloadOptions(
             url=url,
-            output_dir=__import__("pathlib").Path(output_dir),
+            output_dir=Path(output_dir),
             kind=DownloadKind.AUDIO if audio_only else DownloadKind.VIDEO_AUDIO,
             quality=quality,
             audio_codec=audio_codec,
@@ -54,7 +67,7 @@ class DownloadWorker(QThread):
             self.eta.emit(f"{eta}s" if eta else "--")
             self.status.emit("Downloading")
         elif status == "finished":
-            self.output_file = data.get("filename") or self.output_file
+            self.output_file = data.get("filename") or data.get("filepath") or self.output_file
             self.status.emit("Finalizing...")
 
     def build_format(self) -> str:
@@ -62,7 +75,8 @@ class DownloadWorker(QThread):
 
     def run(self) -> None:
         try:
-            self.service.download(self.options, self.hook)
+            result = self.service.download(self.options, self.hook)
+            self.output_file = result or self.output_file
             self.progress.emit(100)
             self.status.emit("Finished")
             self.finished.emit(self.output_file or str(self.options.output_dir))
