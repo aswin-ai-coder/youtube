@@ -3,21 +3,18 @@ title = YouTube Downloader
 package.name = youtubedownloader
 package.domain = org.local
 source.dir = .
-source.include_exts = py,png,jpg,jpeg,kv,json,txt,md
-source.exclude_dirs = youtub,build,dist,.buildozer,__pycache__,.git
-version = 1.0.5
-requirements = python3,kivy==2.3.1,kivymd==2.0.0,materialyoucolor==3.0.3,materialshapes,exceptiongroup,asyncgui,asynckivy,yt-dlp,requests,pillow,certifi,plyer
-orientation = all
+source.include_exts = py,png,jpg,jpeg,kv,json,txt,md,atlas
+source.exclude_dirs = youtub,build,dist,.buildozer,__pycache__,.git,tests,docs
+version = 1.0.6
+requirements = python3,kivy==2.3.1,kivymd==2.0.0,materialyoucolor==3.0.3,materialshapes,exceptiongroup,asyncgui,asynckivy,yt-dlp==2026.8.19,requests,pillow,certifi,plyer,pyjnius
+orientation = portrait
 fullscreen = 0
-android.permissions = INTERNET,POST_NOTIFICATIONS,FOREGROUND_SERVICE
+icon.filename = app/assets/icons/icon.png
+android.permissions = INTERNET,POST_NOTIFICATIONS,FOREGROUND_SERVICE,FOREGROUND_SERVICE_DATA_SYNC,WAKE_LOCK
 android.api = 35
 android.minapi = 23
 android.archs = arm64-v8a
-p4a.branch = v2024.01.21
-services = downloader:service/main.py
-
-# Use the platform launch activity only; the real Kivy UI is rendered
-# immediately by app/ui/android/app.py without an in-app Loading screen.
+services = downloader:service/main.py:foreground:sticky:foregroundServiceType=dataSync
 
 [buildozer]
 log_level = 2
