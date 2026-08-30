@@ -155,17 +155,39 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libcairo2-dev pkg-config python3-dev \
-            libmtdev-dev
+            libmtdev-dev \
+            xvfb \
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev \
+            mesa-utils
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+
+      - name: Verify desktop Kivy runtime
+        env:
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "0"
+          KIVY_WINDOW: "sdl2"
+          KIVY_GL_BACKEND: "sdl2"
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python - <<'PY'
+          import sys
+          import kivy
+          import kivymd
+          print("Python:", sys.version)
+          print("Kivy:", kivy.__version__)
+          print("KivyMD:", kivymd.__version__)
+          PY
 
       - name: Build desktop executable
         env:
           KIVY_NO_ARGS: "1"
-          KIVY_NO_CONSOLELOG: "1"
-          KIVY_WINDOW: "mock"
-          KIVY_GL_BACKEND: "mock"
-        run: python -m PyInstaller --clean --noconfirm youtube_downloader.spec
+          KIVY_NO_CONSOLELOG: "0"
+          KIVY_WINDOW: "sdl2"
+          KIVY_GL_BACKEND: "sdl2"
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
+            python -m PyInstaller --clean --noconfirm youtube_downloader.spec
 
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v6
