@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from kivy.clock import Clock
 from kivy.metrics import dp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.card import MDCard
