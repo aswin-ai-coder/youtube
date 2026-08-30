@@ -1,64 +1,85 @@
-import sys
-import traceback
+from __future__ import annotations
 
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.metrics import dp
 from kivymd.app import MDApp
-from app.core.theme_service import ThemeService
+from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.screenmanager import MDScreenManager
-from kivy.uix.screenmanager import SlideTransition
+from kivymd.uix.widget import Widget
+
+from app.core.theme_service import ThemeService
+from app.ui.android.screens.favorites_screen import FavoritesScreen
+from app.ui.android.screens.history_screen import HistoryScreen
+from app.ui.android.screens.home_screen import HomeScreen
+from app.ui.android.screens.queue_screen import QueueScreen
+from app.ui.android.screens.settings_screen import SettingsScreen
 from app.ui.android.widgets.bottom_nav import BottomNav
 
-from kivymd.uix.boxlayout import MDBoxLayout
-
-# Import screen modules with explicit error handling
-try:
-    from app.ui.android.screens.home_screen import HomeScreen
-    from app.ui.android.screens.queue_screen import QueueScreen
-    from app.ui.android.screens.history_screen import HistoryScreen
-    from app.ui.android.screens.settings_screen import SettingsScreen
-    from app.ui.android.screens.favorites_screen import FavoritesScreen
-except ImportError as e:
-    print(f"ERROR: Failed to import UI components: {e}", file=sys.stderr)
-    traceback.print_exc()
-    raise
 
 class YouTubeDownloaderApp(MDApp):
+    """Android application entry point.
+
+    Keep startup work minimal so the first frame is the real application UI,
+    not a static loading/splash screen. Heavy services are initialized by the
+    individual screens only when they are needed.
+    """
 
     def build(self):
         self.title = "YouTube Downloader"
         self.theme = ThemeService()
         self.theme.apply(self)
-        self.theme_cls.primary_palette = "Blue"
 
-        root = MDBoxLayout(
-            orientation="vertical"
-        )
+        # Avoid leaving a blank/native-looking launch surface visible while
+        # Kivy builds the widget tree. The Android launcher handles its own
+        # launch transition; Kivy should render our UI as soon as possible.
+        try:
+            Window.clearcolor = self.theme_cls.backgroundColor
+        except Exception:
+            pass
 
+        root = MDBoxLayout(orientation="vertical")
         self.sm = MDScreenManager()
 
-        self.sm.add_widget(HomeScreen(name="home"))
-        self.sm.add_widget(QueueScreen(name="queue"))
-        self.sm.add_widget(HistoryScreen(name="history"))
-
-        # Only if FavoritesScreen exists
-        self.sm.add_widget(FavoritesScreen(name="favorites"))
-
-        self.sm.add_widget(SettingsScreen(name="settings"))
-
-        self.nav = BottomNav(self.change)
+        # Construct only the visible screen first. Remaining screens are added
+        # on the next frame so startup remains responsive.
+        self.home = HomeScreen(name="home")
+        self.sm.add_widget(self.home)
 
         root.add_widget(self.sm)
-        root.add_widget(self.nav)
+        self.nav = None
 
-        self.change("home")
+        Clock.schedule_once(self._finish_ui_setup, 0)
         return root
 
-    def change(self, screen):
-        self.sm.transition = SlideTransition(
-            direction="left",
-            duration=0.2,
-        )
+    def _finish_ui_setup(self, _dt):
+        # Add secondary screens after the first frame is on screen.
+        for screen in (
+            QueueScreen(name="queue"),
+            HistoryScreen(name="history"),
+            FavoritesScreen(name="favorites"),
+            SettingsScreen(name="settings"),
+        ):
+            self.sm.add_widget(screen)
 
-        self.sm.current = screen
+        self.nav = BottomNav(self.change)
+        self.root.add_widget(self.nav)
+        self.change("home")
+
+    def change(self, screen: str):
+        if screen in self.sm.screen_names:
+            self.sm.current = screen
+
+    def on_stop(self):
+        # Keep shutdown deterministic and avoid leaving worker threads alive.
+        home = getattr(self, "home", None)
+        coordinator = getattr(home, "coordinator", None)
+        if coordinator is not None:
+            try:
+                coordinator.shutdown()
+            except Exception:
+                pass
+        return super().on_stop()
 
 
 if __name__ == "__main__":
