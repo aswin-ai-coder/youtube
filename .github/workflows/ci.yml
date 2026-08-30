@@ -67,7 +67,7 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app main.py service
 
-      - name: Smoke-test Android UI imports
+      - name: Smoke-test Android UI imports and construction
         env:
           PYTHONUNBUFFERED: "1"
           KIVY_NO_ARGS: "1"
@@ -98,6 +98,10 @@ jobs:
                   "import app.ui.android.screens.home_screen; import app.ui.android.screens.queue_screen; import app.ui.android.screens.history_screen; import app.ui.android.screens.favorites_screen; import app.ui.android.screens.settings_screen",
               ),
               (
+                  "Android screen construction",
+                  "from app.ui.android.screens.home_screen import HomeScreen; from app.ui.android.screens.queue_screen import QueueScreen; from app.ui.android.screens.history_screen import HistoryScreen; from app.ui.android.screens.favorites_screen import FavoritesScreen; from app.ui.android.screens.settings_screen import SettingsScreen; from kivy.clock import Clock; screens=[HomeScreen(), QueueScreen(), HistoryScreen(), FavoritesScreen(), SettingsScreen()]; [Clock.unschedule(event) for screen in screens for event in [getattr(screen, '_refresh_event', None)] if event is not None]; print('constructed', len(screens), 'Android screens')",
+              ),
+              (
                   "Android app",
                   "from app.ui.android.app import YouTubeDownloaderApp; print(YouTubeDownloaderApp.__name__)",
               ),
@@ -123,9 +127,9 @@ jobs:
                   print("--- stderr ---", file=sys.stderr, flush=True)
                   print(result.stderr, end="", file=sys.stderr, flush=True)
               if result.returncode != 0:
-                  raise SystemExit(f"Android import check failed: {label} (exit {result.returncode})")
+                  raise SystemExit(f"Android smoke check failed: {label} (exit {result.returncode})")
 
-          print("\nAndroid UI imports OK", flush=True)
+          print("\nAndroid UI smoke checks OK", flush=True)
           PY
 
       - name: Run tests
