@@ -23,6 +23,7 @@ class HistoryPanel(QFrame):
     def __init__(self) -> None:
         super().__init__()
         self._ids: list[int] = []
+        self._records: list[dict] = []
         layout = QVBoxLayout(self)
         filters = QHBoxLayout()
         self.search_input = QLineEdit()
@@ -77,7 +78,7 @@ class HistoryPanel(QFrame):
         )
 
     def _update_details(self) -> None:
-        if record_id := self.selected_id():
+        if self.selected_id() is not None:
             row = self.history_list.currentRow()
             if row < 0 or row >= len(self._ids):
                 return

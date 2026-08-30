@@ -4,11 +4,16 @@ import traceback
 
 from kivy.clock import Clock
 from kivy.metrics import dp
+from kivy.uix.screenmanager import SlideTransition
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.screenmanager import MDScreenManager
-from kivy.uix.screenmanager import SlideTransition
+
+from app.utils.logger import get_logger
+
+
+logger = get_logger("android-app")
 
 
 class YouTubeDownloaderApp(MDApp):
@@ -20,11 +25,10 @@ class YouTubeDownloaderApp(MDApp):
         self._root = MDBoxLayout(orientation="vertical")
         self._root.add_widget(self.sm)
         self._ui_ready = False
+        self.clipboard_service = None
         return self._root
 
     def on_start(self):
-        # python-for-android's SDL2 bootstrap owns the Android loading screen.
-        # Dismiss it explicitly once the Kivy window is alive.
         self._hide_android_loading_screen()
         Clock.schedule_once(self._initialize_ui, 0)
 
@@ -32,15 +36,12 @@ class YouTubeDownloaderApp(MDApp):
         try:
             from android import loadingscreen
             loadingscreen.hide_loading_screen()
-        except (ImportError, AttributeError, RuntimeError):
-            # The Android bootstrap may already have removed the screen, or
-            # this method may be running on desktop. Neither is an error.
-            pass
+        except (ImportError, AttributeError, RuntimeError) as exc:
+            logger.debug("Android loading screen hide unavailable: %s", exc)
 
     def _initialize_ui(self, *_args):
         if self._ui_ready:
             return
-
         try:
             from app.core.theme_service import ThemeService
             from app.ui.android.screens.favorites_screen import FavoritesScreen
@@ -64,6 +65,7 @@ class YouTubeDownloaderApp(MDApp):
             self._root.add_widget(self.nav)
             self._ui_ready = True
         except Exception as exc:
+            logger.exception("Android UI initialization failed")
             traceback.print_exc()
             self._show_startup_error(exc)
 
@@ -88,13 +90,12 @@ class YouTubeDownloaderApp(MDApp):
             self.sm.current = screen
 
     def on_stop(self):
-        home = self.sm.get_screen("home") if "home" in self.sm.screen_names else None
-        coordinator = getattr(home, "coordinator", None)
-        if coordinator is not None:
+        clipboard = getattr(self, "clipboard_service", None)
+        if clipboard is not None:
             try:
-                coordinator.shutdown()
-            except Exception:
-                pass
+                clipboard.shutdown()
+            except Exception as exc:
+                logger.exception("Android clipboard shutdown failed: %s", exc)
         return super().on_stop()
 
 

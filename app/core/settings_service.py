@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
@@ -22,7 +24,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 
 class SettingsService:
-    """Persist user settings as a simple JSON file."""
+    """Persist user settings as a simple JSON file with legacy-key migration."""
 
     def __init__(self, path: str | Path | None = None):
         self.path = Path(path or Path.home() / ".youtube_downloader_settings.json")
@@ -36,8 +38,17 @@ class SettingsService:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     self._data.update(loaded)
+                    self._migrate_legacy_keys(loaded)
             except (json.JSONDecodeError, OSError):
                 self._data = DEFAULT_SETTINGS.copy()
+
+    def _migrate_legacy_keys(self, loaded: dict[str, Any]) -> None:
+        if "clipboard_monitor" in loaded:
+            self._data["clipboard_monitoring"] = bool(loaded["clipboard_monitor"])
+        if "primary_color" in loaded:
+            self._data["accent_color"] = loaded["primary_color"]
+        self._data.pop("clipboard_monitor", None)
+        self._data.pop("primary_color", None)
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -48,13 +59,22 @@ class SettingsService:
         temp.replace(self.path)
 
     def get(self, key: str, default: Any = None) -> Any:
+        if key == "clipboard_monitor":
+            key = "clipboard_monitoring"
+        elif key == "primary_color":
+            key = "accent_color"
         return self._data.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
+        if key == "clipboard_monitor":
+            key = "clipboard_monitoring"
+        elif key == "primary_color":
+            key = "accent_color"
         self._data[key] = value
 
     def update(self, values: dict[str, Any]) -> None:
-        self._data.update(values)
+        for key, value in values.items():
+            self.set(key, value)
 
     def as_dict(self) -> dict[str, Any]:
         return self._data.copy()

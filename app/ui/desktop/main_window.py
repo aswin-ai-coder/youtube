@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar
 from PySide6.QtWidgets import QPushButton, QSplitter, QTabWidget, QVBoxLayout, QWidget
+
 from app.utils.error_handler import ErrorHandler
 from app.core.history_service import HistoryService
 from app.core.playlist_service import PlaylistMetadata, PlaylistService
@@ -292,7 +293,8 @@ class MainWindow(QMainWindow):
         )
         self._load_history()
         self._log(f"Completed: {title}")
-        self.notifications.show("Download completed", title or "Download completed")
+        if self.settings.get("notifications", True):
+            self.notifications.show("Download completed", title or "Download completed")
 
     def _download_failed(self, item_id: str, message: str) -> None:
         item = self.queue_service.get(item_id)
@@ -303,7 +305,8 @@ class MainWindow(QMainWindow):
         )
         self._load_history()
         self._log(f"Failed: {message}")
-        self.notifications.show("Download failed", message)
+        if self.settings.get("notifications", True):
+            self.notifications.show("Download failed", message)
 
     def _refresh_queue(self) -> None:
         self.queue_panel.set_queue_items(self.queue_service.list_items())

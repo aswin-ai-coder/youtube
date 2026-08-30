@@ -16,33 +16,25 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12"]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-
       - name: Install test system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libcairo2-dev pkg-config python3-dev \
-            libmtdev-dev libmtdev1 \
-            xvfb \
-            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev \
-            mesa-utils
-
+          sudo apt-get install -y libcairo2-dev pkg-config python3-dev libmtdev-dev libmtdev1 xvfb libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev mesa-utils
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-
+          python -m pip install ruff
+      - name: Static Python lint
+        run: ruff check app service tests --select E4,E7,E9,F
       - name: Verify test dependencies
         env:
           KIVY_NO_ARGS: "1"
@@ -50,84 +42,60 @@ jobs:
         run: |
           python - <<'PY'
           import importlib
-          import sys
-          import traceback
-
-          packages = ("kivy", "kivymd", "cairo", "asyncgui", "asynckivy", "pytest")
-          for name in packages:
-              try:
-                  module = importlib.import_module(name)
-                  print(f"{name}: {getattr(module, '__version__', 'installed')}")
-              except BaseException as exc:
-                  print(f"ERROR: failed to import {name}: {exc!r}", file=sys.stderr)
-                  traceback.print_exc()
-                  raise
+          for name in ("kivy", "kivymd", "cairo", "asyncgui", "asynckivy", "pytest"):
+              module = importlib.import_module(name)
+              print(f"{name}: {getattr(module, '__version__', 'installed')}")
           PY
-
       - name: Compile Python sources
         run: python -m compileall -q app main.py service
-
-      - name: Smoke-test Android UI imports
+      - name: Smoke-test Android UI and service imports
         env:
-          PYTHONUNBUFFERED: "1"
           KIVY_NO_ARGS: "1"
-          KIVY_NO_CONSOLELOG: "0"
+          KIVY_NO_CONSOLELOG: "1"
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python - <<'PY'
-          import os
-          import subprocess
-          import sys
+          import importlib
 
-          checks = (
-              (
-                  "KivyMD navigationbar imports",
-                  "from kivymd.uix.navigationbar import MDNavigationBar, MDNavigationItem, MDNavigationItemIcon, MDNavigationItemLabel",
-              ),
-              (
-                  "Android BottomNav module",
-                  "import app.ui.android.widgets.bottom_nav",
-              ),
-              (
-                  "Android remaining widgets",
-                  "import app.ui.android.widgets.download_panel; import app.ui.android.widgets.download_sheet; import app.ui.android.widgets.history_card; import app.ui.android.widgets.playlist_dialog; import app.ui.android.widgets.playlist_item; import app.ui.android.widgets.playlist_progress; import app.ui.android.widgets.queue_card; import app.ui.android.widgets.queue_item; import app.ui.android.widgets.url_bar; import app.ui.android.widgets.video_card",
-              ),
-              (
-                  "Android screens",
-                  "import app.ui.android.screens.home_screen; import app.ui.android.screens.queue_screen; import app.ui.android.screens.history_screen; import app.ui.android.screens.favorites_screen; import app.ui.android.screens.settings_screen",
-              ),
-              (
-                  "Android app",
-                  "from app.ui.android.app import YouTubeDownloaderApp; print(YouTubeDownloaderApp.__name__)",
-              ),
+          modules = (
+              "app.ui.android.app",
+              "app.ui.android.android_queue_item_factory",
+              "app.ui.android.widgets.bottom_nav",
+              "app.ui.android.widgets.download_panel",
+              "app.ui.android.widgets.playlist_dialog",
+              "app.ui.android.widgets.playlist_item",
+              "app.ui.android.widgets.queue_item",
+              "app.ui.android.widgets.url_bar",
+              "app.ui.android.widgets.video_card",
+              "app.ui.android.screens.home_screen",
+              "app.ui.android.screens.queue_screen",
+              "app.ui.android.screens.history_screen",
+              "app.ui.android.screens.favorites_screen",
+              "app.ui.android.screens.search_history_screen",
+              "app.ui.android.screens.settings_screen",
+              "service.main",
           )
+          for name in modules:
+              importlib.import_module(name)
+              print(f"import OK: {name}")
 
-          print("Python:", sys.version, flush=True)
-          print("Kivy window:", os.environ.get("KIVY_WINDOW"), flush=True)
-          print("Kivy GL backend:", os.environ.get("KIVY_GL_BACKEND"), flush=True)
+          from kivy.clock import Clock
+          from app.ui.android.app import YouTubeDownloaderApp
 
-          for label, code in checks:
-              print(f"\n=== {label} ===", flush=True)
-              result = subprocess.run(
-                  [sys.executable, "-c", code],
-                  text=True,
-                  capture_output=True,
-                  env=os.environ.copy(),
-              )
-              print("returncode:", result.returncode, flush=True)
-              if result.stdout:
-                  print("--- stdout ---", flush=True)
-                  print(result.stdout, end="", flush=True)
-              if result.stderr:
-                  print("--- stderr ---", file=sys.stderr, flush=True)
-                  print(result.stderr, end="", file=sys.stderr, flush=True)
-              if result.returncode != 0:
-                  raise SystemExit(f"Android import check failed: {label} (exit {result.returncode})")
+          app = YouTubeDownloaderApp()
+          Clock.schedule_once(lambda _dt: app.stop(), 2.0)
+          app.run()
 
-          print("\nAndroid UI imports OK", flush=True)
+          print(f"_ui_ready: {app._ui_ready}")
+          print(f"screen_names: {set(app.sm.screen_names)}")
+
+          assert app._ui_ready, "Android UI did not finish initialization"
+          expected_screens = {"home", "queue", "history", "favorites", "settings"}
+          actual_screens = set(app.sm.screen_names)
+          assert actual_screens == expected_screens, f"Screen mismatch. Expected: {expected_screens}, Got: {actual_screens}"
+          print("Android app lifecycle/UI construction OK")
           PY
-
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
@@ -143,25 +111,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libcairo2-dev pkg-config python3-dev \
-            libmtdev-dev libmtdev1 \
-            xvfb \
-            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev
+          sudo apt-get install -y libcairo2-dev pkg-config python3-dev libmtdev-dev libmtdev1 xvfb libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-
       - name: Verify desktop Kivy runtime
         env:
           KIVY_NO_ARGS: "1"
@@ -169,24 +129,19 @@ jobs:
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
-            python - <<'PY'
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python - <<'PY'
           import kivy
           import kivymd
           print("Kivy:", kivy.__version__)
           print("KivyMD:", kivymd.__version__)
           PY
-
       - name: Build desktop executable
         env:
           KIVY_NO_ARGS: "1"
           KIVY_NO_CONSOLELOG: "0"
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
-        run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
-            python -m PyInstaller --clean --noconfirm youtube_downloader.spec
-
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python -m PyInstaller --clean --noconfirm youtube_downloader.spec
       - name: Upload desktop artifact
         uses: actions/upload-artifact@v6
         with:
@@ -203,33 +158,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: pip
-
       - name: Install Android build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential git zip unzip curl \
-            openjdk-17-jdk \
-            autoconf automake libtool libtool-bin libltdl-dev m4 \
-            pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
-            cmake libffi-dev libssl-dev \
-            liblzma-dev libsqlite3-dev
+          sudo apt-get install -y build-essential git zip unzip curl openjdk-17-jdk autoconf automake libtool libtool-bin libltdl-dev m4 pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev liblzma-dev libsqlite3-dev
           python -m pip install --upgrade pip
           python -m pip install buildozer==1.6.0 cython==0.29.37
           echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
           echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> "$GITHUB_PATH"
-
       - name: Verify Java
         run: |
           java -version
           javac -version
-
       - name: Install modern Android command-line tools
         run: |
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
@@ -239,17 +184,12 @@ jobs:
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
           echo "$ANDROID_SDK_ROOT/build-tools/35.0.1" >> "$GITHUB_PATH"
-
       - name: Install Android SDK packages and accept licenses
         run: |
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
-          "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" \
-            "platform-tools" \
-            "build-tools;35.0.1" \
-            "platforms;android-35"
+          "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "build-tools;35.0.1" "platforms;android-35"
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
-
       - name: Configure Buildozer to use prepared Android SDK
         run: |
           mkdir -p "$HOME/.buildozer/android/platform"
@@ -257,7 +197,6 @@ jobs:
           mkdir -p "$ANDROID_SDK_ROOT/tools/bin"
           ln -sfn "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
           rm -rf .buildozer bin
-
       - name: Verify Android SDK tooling
         run: |
           sdkmanager --version
@@ -265,13 +204,10 @@ jobs:
           test -x "$ANDROID_SDK_ROOT/build-tools/35.0.1/aidl"
           test -x "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
           "$ANDROID_SDK_ROOT/tools/bin/sdkmanager" --version
-
       - name: Build Android debug APK
         env:
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
-        run: |
-          yes | buildozer android debug
-
+        run: yes | buildozer android debug
       - name: Upload APK
         uses: actions/upload-artifact@v6
         with:

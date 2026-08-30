@@ -7,6 +7,8 @@ except ImportError:
 
 
 class NotificationService:
+    """Small cross-platform notification facade."""
+
     @staticmethod
     def show(title: str, message: str) -> None:
         if notification is None:
@@ -15,3 +17,7 @@ class NotificationService:
             notification.notify(title=title, message=message, timeout=5)
         except Exception:
             return
+
+    def notify(self, title: str, message: str) -> None:
+        """Compatibility method for background-service callers."""
+        self.show(title, message)
