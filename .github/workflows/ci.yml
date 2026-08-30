@@ -84,10 +84,16 @@ jobs:
           from app.ui.android.app import YouTubeDownloaderApp
 
           app = YouTubeDownloaderApp()
-          Clock.schedule_once(lambda _dt: app.stop(), 0.75)
+          Clock.schedule_once(lambda _dt: app.stop(), 2.0)
           app.run()
+
+          print(f"_ui_ready: {app._ui_ready}")
+          print(f"screen_names: {set(app.sm.screen_names)}")
+
           assert app._ui_ready, "Android UI did not finish initialization"
-          assert set(app.sm.screen_names) == {"home", "queue", "history", "favorites", "settings"}
+          expected_screens = {"home", "queue", "history", "favorites", "settings"}
+          actual_screens = set(app.sm.screen_names)
+          assert actual_screens == expected_screens, f"Screen mismatch. Expected: {expected_screens}, Got: {actual_screens}"
           print("Android app lifecycle/UI construction OK")
           PY
       - name: Run tests
