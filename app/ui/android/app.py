@@ -4,11 +4,16 @@ import traceback
 
 from kivy.clock import Clock
 from kivy.metrics import dp
+from kivy.uix.screenmanager import SlideTransition
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.screenmanager import MDScreenManager
-from kivy.uix.screenmanager import SlideTransition
+
+from app.utils.logger import get_logger
+
+
+logger = get_logger("android-app")
 
 
 class YouTubeDownloaderApp(MDApp):
@@ -31,8 +36,8 @@ class YouTubeDownloaderApp(MDApp):
         try:
             from android import loadingscreen
             loadingscreen.hide_loading_screen()
-        except (ImportError, AttributeError, RuntimeError):
-            pass
+        except (ImportError, AttributeError, RuntimeError) as exc:
+            logger.debug("Android loading screen hide unavailable: %s", exc)
 
     def _initialize_ui(self, *_args):
         if self._ui_ready:
@@ -60,6 +65,7 @@ class YouTubeDownloaderApp(MDApp):
             self._root.add_widget(self.nav)
             self._ui_ready = True
         except Exception as exc:
+            logger.exception("Android UI initialization failed")
             traceback.print_exc()
             self._show_startup_error(exc)
 
@@ -88,8 +94,8 @@ class YouTubeDownloaderApp(MDApp):
         if clipboard is not None:
             try:
                 clipboard.shutdown()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("Android clipboard shutdown failed: %s", exc)
         return super().on_stop()
 
 
