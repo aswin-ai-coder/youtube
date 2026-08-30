@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from yt_dlp import YoutubeDL
@@ -66,14 +65,7 @@ class DownloadEngine:
         return ydl_options
 
     def download(self, options: DownloadOptions, progress_hook: Any | None = None) -> str | None:
-        """Download media and return the most recently finalized output path.
-
-        yt-dlp's ``download()`` return value is an integer status code, not a
-        filename.  Older code incorrectly treated it as a path, which caused
-        history and file actions to store invalid output paths.  We instead
-        capture filenames from progress/post-processing hooks and fall back to
-        the download filename reported by yt-dlp.
-        """
+        """Download media and return the most recently finalized output path."""
         options.output_dir.mkdir(parents=True, exist_ok=True)
         final_path: str | None = None
 
