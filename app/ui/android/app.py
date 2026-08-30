@@ -20,11 +20,10 @@ class YouTubeDownloaderApp(MDApp):
         self._root = MDBoxLayout(orientation="vertical")
         self._root.add_widget(self.sm)
         self._ui_ready = False
+        self.clipboard_service = None
         return self._root
 
     def on_start(self):
-        # python-for-android's SDL2 bootstrap owns the Android loading screen.
-        # Dismiss it explicitly once the Kivy window is alive.
         self._hide_android_loading_screen()
         Clock.schedule_once(self._initialize_ui, 0)
 
@@ -33,14 +32,11 @@ class YouTubeDownloaderApp(MDApp):
             from android import loadingscreen
             loadingscreen.hide_loading_screen()
         except (ImportError, AttributeError, RuntimeError):
-            # The Android bootstrap may already have removed the screen, or
-            # this method may be running on desktop. Neither is an error.
             pass
 
     def _initialize_ui(self, *_args):
         if self._ui_ready:
             return
-
         try:
             from app.core.theme_service import ThemeService
             from app.ui.android.screens.favorites_screen import FavoritesScreen
@@ -88,11 +84,10 @@ class YouTubeDownloaderApp(MDApp):
             self.sm.current = screen
 
     def on_stop(self):
-        home = self.sm.get_screen("home") if "home" in self.sm.screen_names else None
-        coordinator = getattr(home, "coordinator", None)
-        if coordinator is not None:
+        clipboard = getattr(self, "clipboard_service", None)
+        if clipboard is not None:
             try:
-                coordinator.shutdown()
+                clipboard.shutdown()
             except Exception:
                 pass
         return super().on_stop()
