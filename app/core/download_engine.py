@@ -66,16 +66,41 @@ class DownloadEngine:
         return ydl_options
 
     def download(self, options: DownloadOptions, progress_hook: Any | None = None) -> str | None:
-        options.output_dir.mkdir(parents=True, exist_ok=True)
-        if self._output_exists(options):
-            raise FileExistsError(f"Output already exists for template {options.filename_template}.")
-        with YoutubeDL(self.build_options(options, progress_hook)) as ydl:
-            result = ydl.download([options.url])
-        return str(options.output_dir) if result is None else str(result)
+        """Download media and return the most recently finalized output path.
 
-    def _output_exists(self, options: DownloadOptions) -> bool:
-        pattern = options.filename_template.replace("%(ext)s", "*") if "%(ext)s" in options.filename_template else f"{options.filename_template}*"
-        return any(options.output_dir.glob(pattern))
+        yt-dlp's ``download()`` return value is an integer status code, not a
+        filename.  Older code incorrectly treated it as a path, which caused
+        history and file actions to store invalid output paths.  We instead
+        capture filenames from progress/post-processing hooks and fall back to
+        the download filename reported by yt-dlp.
+        """
+        options.output_dir.mkdir(parents=True, exist_ok=True)
+        final_path: str | None = None
+
+        def hook(data: dict[str, Any]) -> None:
+            nonlocal final_path
+            filename = data.get("filename") or data.get("filepath")
+            if filename:
+                final_path = str(filename)
+            if progress_hook:
+                progress_hook(data)
+
+        def postprocessor_hook(data: dict[str, Any]) -> None:
+            nonlocal final_path
+            info = data.get("info_dict") or {}
+            filename = info.get("filepath") or data.get("filepath")
+            if filename:
+                final_path = str(filename)
+
+        ydl_options = self.build_options(options, hook)
+        ydl_options["postprocessor_hooks"] = [postprocessor_hook]
+
+        with YoutubeDL(ydl_options) as ydl:
+            ydl.download([options.url])
+
+        if final_path:
+            return final_path
+        return None
 
     def _postprocessors(self, options: DownloadOptions) -> list[dict[str, Any]]:
         processors: list[dict[str, Any]] = []
