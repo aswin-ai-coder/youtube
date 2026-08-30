@@ -45,7 +45,12 @@ class HomeScreen(MDScreen):
 
         root = MDBoxLayout(orientation="vertical", padding=dp(20), spacing=dp(20))
         scroll = MDScrollView()
-        content = MDBoxLayout(orientation="vertical", adaptive_height=True, spacing=dp(20), padding=[0, dp(8), 0, dp(30)])
+        content = MDBoxLayout(
+            orientation="vertical",
+            adaptive_height=True,
+            spacing=dp(20),
+            padding=[0, dp(8), 0, dp(30)],
+        )
         self.url_bar = UrlBar()
         self.video_card = VideoCard()
         self.download_panel = DownloadPanel()
@@ -126,7 +131,8 @@ class HomeScreen(MDScreen):
         app = App.get_running_app()
         if app is not None and "queue" in app.sm.screen_names:
             app.sm.get_screen("queue").refresh()
-        self.notifications.show("Download Queued", item.title or "Download")
+        if self.settings.get("notifications", True):
+            self.notifications.show("Download Queued", item.title or "Download")
 
     def clipboard_detected(self, url):
         Clock.schedule_once(lambda dt: setattr(self.url_bar.url_input, "text", url))
