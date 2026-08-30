@@ -80,10 +80,15 @@ jobs:
               importlib.import_module(name)
               print(f"import OK: {name}")
 
+          from kivy.clock import Clock
           from app.ui.android.app import YouTubeDownloaderApp
+
           app = YouTubeDownloaderApp()
-          assert app.build() is not None
-          print("Android app build object OK")
+          Clock.schedule_once(lambda _dt: app.stop(), 0.75)
+          app.run()
+          assert app._ui_ready, "Android UI did not finish initialization"
+          assert set(app.sm.screen_names) == {"home", "queue", "history", "favorites", "settings"}
+          print("Android app lifecycle/UI construction OK")
           PY
       - name: Run tests
         env:
