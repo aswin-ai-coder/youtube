@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
@@ -22,7 +24,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 
 class SettingsService:
-    """Persist user settings as a simple JSON file."""
+    """Persist user settings as a simple JSON file with legacy-key migration."""
 
     def __init__(self, path: str | Path | None = None):
         self.path = Path(path or Path.home() / ".youtube_downloader_settings.json")
@@ -38,6 +40,15 @@ class SettingsService:
                     self._data.update(loaded)
             except (json.JSONDecodeError, OSError):
                 self._data = DEFAULT_SETTINGS.copy()
+        self._migrate_legacy_keys()
+
+    def _migrate_legacy_keys(self) -> None:
+        if "clipboard_monitor" in self._data and "clipboard_monitoring" not in self._data:
+            self._data["clipboard_monitoring"] = self._data["clipboard_monitor"]
+        if "primary_color" in self._data and "accent_color" not in self._data:
+            self._data["accent_color"] = self._data["primary_color"]
+        self._data.pop("clipboard_monitor", None)
+        self._data.pop("primary_color", None)
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -51,10 +62,15 @@ class SettingsService:
         return self._data.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
+        if key == "clipboard_monitor":
+            key = "clipboard_monitoring"
+        elif key == "primary_color":
+            key = "accent_color"
         self._data[key] = value
 
     def update(self, values: dict[str, Any]) -> None:
-        self._data.update(values)
+        for key, value in values.items():
+            self.set(key, value)
 
     def as_dict(self) -> dict[str, Any]:
         return self._data.copy()
