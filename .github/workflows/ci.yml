@@ -32,7 +32,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libcairo2-dev pkg-config python3-dev \
-            libmtdev-dev \
+            libmtdev-dev libmtdev1 \
             xvfb \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
             libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev \
@@ -155,11 +155,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libcairo2-dev pkg-config python3-dev \
-            libmtdev-dev \
+            libmtdev-dev libmtdev1 \
             xvfb \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev \
-            mesa-utils
+            libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
@@ -170,11 +169,10 @@ jobs:
           KIVY_WINDOW: "sdl2"
           KIVY_GL_BACKEND: "sdl2"
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" python - <<'PY'
-          import sys
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
+            python - <<'PY'
           import kivy
           import kivymd
-          print("Python:", sys.version)
           print("Kivy:", kivy.__version__)
           print("KivyMD:", kivymd.__version__)
           PY
@@ -271,7 +269,6 @@ jobs:
       - name: Build Android debug APK
         env:
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
-          BUILDOZER_MESON_SKIP_SANITY_CHECK: "1"
         run: |
           yes | buildozer android debug
 
