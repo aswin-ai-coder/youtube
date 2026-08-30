@@ -1,7 +1,6 @@
 from kivy.metrics import dp
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.uix.card import MDCard
-from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.button import (
     MDButton,
