@@ -98,6 +98,10 @@ jobs:
                   "import app.ui.android.screens.home_screen; import app.ui.android.screens.queue_screen; import app.ui.android.screens.history_screen; import app.ui.android.screens.favorites_screen; import app.ui.android.screens.settings_screen",
               ),
               (
+                  "Android core",
+                  "from app.core.android_download_coordinator import AndroidDownloadCoordinator; from app.core.android_storage_service import AndroidStorageService; print(AndroidDownloadCoordinator.__name__, AndroidStorageService.__name__)",
+              ),
+              (
                   "Android app",
                   "from app.ui.android.app import YouTubeDownloaderApp; print(YouTubeDownloaderApp.__name__)",
               ),
@@ -238,7 +242,7 @@ jobs:
           mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-          echo "$ANDROID_SDK_ROOT/build-tools/35.0.1" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/build-tools/36.0.0" >> "$GITHUB_PATH"
 
       - name: Install Android SDK packages and accept licenses
         run: |
@@ -246,8 +250,8 @@ jobs:
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
           "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
-            "build-tools;35.0.1" \
-            "platforms;android-35"
+            "build-tools;36.0.0" \
+            "platforms;android-36"
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
 
       - name: Configure Buildozer to use prepared Android SDK
@@ -262,7 +266,7 @@ jobs:
         run: |
           sdkmanager --version
           "$ANDROID_SDK_ROOT/platform-tools/adb" version
-          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.1/aidl"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/aidl"
           test -x "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
           "$ANDROID_SDK_ROOT/tools/bin/sdkmanager" --version
 
