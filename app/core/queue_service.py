@@ -13,6 +13,19 @@ from app.core.models import DownloadKind, QueueStatus
 from app.utils.logger import get_logger
 
 
+def _local_now() -> datetime:
+    return datetime.now().astimezone()
+
+
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        local = _local_now().tzinfo
+        return value.replace(tzinfo=local)
+    return value.astimezone()
+
+
 @dataclass(slots=True)
 class QueueItem:
     url: str
@@ -47,6 +60,7 @@ class QueueItem:
     def __post_init__(self) -> None:
         if self.audio_only:
             self.kind = DownloadKind.AUDIO
+        self.scheduled_at = _normalize_datetime(self.scheduled_at)
         if self.scheduled_at and self.status == QueueStatus.QUEUED:
             self.status = QueueStatus.SCHEDULED
         self.output_dir = str(Path(self.output_dir).expanduser())
@@ -78,9 +92,7 @@ class QueueService:
                 items.append(data)
             temp = self._queue_file.with_suffix(".json.tmp")
             try:
-                temp.write_text(
-                    json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8"
-                )
+                temp.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
                 temp.replace(self._queue_file)
             except Exception as exc:
                 self.logger.error(f"Failed to save queue: {exc}")
@@ -104,13 +116,8 @@ class QueueService:
                     raw = dict(raw)
                     if raw.get("scheduled_at"):
                         raw["scheduled_at"] = datetime.fromisoformat(raw["scheduled_at"])
-                    raw["status"] = QueueStatus(
-                        raw.get("status", QueueStatus.QUEUED.value)
-                    )
-                    raw["kind"] = DownloadKind(
-                        raw.get("kind", DownloadKind.VIDEO_AUDIO.value)
-                    )
-                    # Forward-compatible loading for queues created by older builds.
+                    raw["status"] = QueueStatus(raw.get("status", QueueStatus.QUEUED.value))
+                    raw["kind"] = DownloadKind(raw.get("kind", DownloadKind.VIDEO_AUDIO.value))
                     raw.setdefault("embed_thumbnail", True)
                     raw.setdefault("embed_metadata", True)
                     raw.setdefault("thumbnail_url", None)
@@ -139,14 +146,10 @@ class QueueService:
             self.enqueue(item)
 
     def dequeue(self) -> QueueItem | None:
-        now = datetime.now()
+        now = _local_now()
         with self._lock:
             for item in self._queue:
-                if (
-                    item.status == QueueStatus.SCHEDULED
-                    and item.scheduled_at
-                    and item.scheduled_at <= now
-                ):
+                if item.status == QueueStatus.SCHEDULED and item.scheduled_at and item.scheduled_at <= now:
                     item.status = QueueStatus.QUEUED
                 if item.status == QueueStatus.QUEUED:
                     item.status = QueueStatus.RUNNING
@@ -156,16 +159,7 @@ class QueueService:
         self.save_queue()
         return item
 
-    def update(
-        self,
-        item_id: str,
-        *,
-        status: QueueStatus | None = None,
-        progress: int | None = None,
-        error: str | None = None,
-        title: str | None = None,
-        thumbnail_url: str | None = None,
-    ) -> QueueItem | None:
+    def update(self, item_id: str, *, status: QueueStatus | None = None, progress: int | None = None, error: str | None = None, title: str | None = None, thumbnail_url: str | None = None) -> QueueItem | None:
         with self._lock:
             item = self.get(item_id)
             if not item:
@@ -186,29 +180,16 @@ class QueueService:
     def retry(self, item_id: str) -> bool:
         with self._lock:
             item = self.get(item_id)
-            if not item or item.status not in {
-                QueueStatus.FAILED,
-                QueueStatus.CANCELLED,
-                QueueStatus.PAUSED,
-            }:
+            if not item or item.status not in {QueueStatus.FAILED, QueueStatus.CANCELLED, QueueStatus.PAUSED}:
                 return False
             item.status, item.progress, item.error = QueueStatus.QUEUED, 0, None
         self.save_queue()
         return True
 
     def due_count(self) -> int:
-        now = datetime.now()
+        now = _local_now()
         with self._lock:
-            return sum(
-                1
-                for item in self._queue
-                if item.status == QueueStatus.QUEUED
-                or (
-                    item.status == QueueStatus.SCHEDULED
-                    and item.scheduled_at
-                    and item.scheduled_at <= now
-                )
-            )
+            return sum(1 for item in self._queue if item.status == QueueStatus.QUEUED or (item.status == QueueStatus.SCHEDULED and item.scheduled_at and item.scheduled_at <= now))
 
     def remove(self, item_id: str) -> bool:
         with self._lock:
@@ -222,9 +203,7 @@ class QueueService:
     def move(self, item_id: str, offset: int) -> bool:
         with self._lock:
             items = list(self._queue)
-            index = next(
-                (i for i, item in enumerate(items) if item.id == item_id), -1
-            )
+            index = next((i for i, item in enumerate(items) if item.id == item_id), -1)
             if index < 0:
                 return False
             new_index = max(0, min(len(items) - 1, index + offset))
