@@ -91,7 +91,7 @@ jobs:
               ),
               (
                   "Android remaining widgets",
-                  "import app.ui.android.widgets.download_panel; import app.ui.android.widgets.download_sheet; import app.ui.android.widgets.history_card; import app.ui.android.widgets.playlist_dialog; import app.ui.android.widgets.playlist_item; import app.ui.android.widgets.playlist_progress; import app.ui.android.widgets.progress_card; import app.ui.android.widgets.queue_card; import app.ui.android.widgets.queue_item; import app.ui.android.widgets.url_bar; import app.ui.android.widgets.video_card",
+                  "import app.ui.android.widgets.download_panel; import app.ui.android.widgets.download_sheet; import app.ui.android.widgets.history_card; import app.ui.android.widgets.playlist_dialog; import app.ui.android.widgets.playlist_item; import app.ui.android.widgets.playlist_progress; import app.ui.android.widgets.queue_card; import app.ui.android.widgets.queue_item; import app.ui.android.widgets.url_bar; import app.ui.android.widgets.video_card",
               ),
               (
                   "Android screens",
