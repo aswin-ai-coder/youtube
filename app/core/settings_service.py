@@ -38,15 +38,15 @@ class SettingsService:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     self._data.update(loaded)
+                    self._migrate_legacy_keys(loaded)
             except (json.JSONDecodeError, OSError):
                 self._data = DEFAULT_SETTINGS.copy()
-        self._migrate_legacy_keys()
 
-    def _migrate_legacy_keys(self) -> None:
-        if "clipboard_monitor" in self._data and "clipboard_monitoring" not in self._data:
-            self._data["clipboard_monitoring"] = self._data["clipboard_monitor"]
-        if "primary_color" in self._data and "accent_color" not in self._data:
-            self._data["accent_color"] = self._data["primary_color"]
+    def _migrate_legacy_keys(self, loaded: dict[str, Any]) -> None:
+        if "clipboard_monitor" in loaded:
+            self._data["clipboard_monitoring"] = bool(loaded["clipboard_monitor"])
+        if "primary_color" in loaded:
+            self._data["accent_color"] = loaded["primary_color"]
         self._data.pop("clipboard_monitor", None)
         self._data.pop("primary_color", None)
 
@@ -59,6 +59,10 @@ class SettingsService:
         temp.replace(self.path)
 
     def get(self, key: str, default: Any = None) -> Any:
+        if key == "clipboard_monitor":
+            key = "clipboard_monitoring"
+        elif key == "primary_color":
+            key = "accent_color"
         return self._data.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
