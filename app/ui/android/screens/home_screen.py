@@ -24,6 +24,10 @@ from app.ui.android.widgets.playlist_dialog import PlaylistDialog
 from app.ui.android.widgets.url_bar import UrlBar
 from app.ui.android.widgets.video_card import VideoCard
 from app.utils.helpers import format_duration, format_number
+from app.utils.logger import get_logger
+
+
+logger = get_logger("android-home")
 
 
 class HomeScreen(MDScreen):
@@ -85,7 +89,11 @@ class HomeScreen(MDScreen):
                 metadata.playlist_count = metadata.playlist_count or playlist.count
             Clock.schedule_once(lambda dt: self._show_metadata(metadata, playlist))
         except Exception as exc:
-            Clock.schedule_once(lambda dt: self.url_bar.show_error(str(exc)))
+            message = str(exc) or "Unable to analyze this URL."
+            logger.error("Android analysis failed: %s", message)
+            Clock.schedule_once(
+                lambda dt, message=message: self.url_bar.show_error(message)
+            )
         finally:
             Clock.schedule_once(lambda dt: self.url_bar.set_loading(False))
 
