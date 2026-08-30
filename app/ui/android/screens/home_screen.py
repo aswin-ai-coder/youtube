@@ -45,12 +45,7 @@ class HomeScreen(MDScreen):
 
         root = MDBoxLayout(orientation="vertical", padding=dp(20), spacing=dp(20))
         scroll = MDScrollView()
-        content = MDBoxLayout(
-            orientation="vertical",
-            adaptive_height=True,
-            spacing=dp(20),
-            padding=[0, dp(8), 0, dp(30)],
-        )
+        content = MDBoxLayout(orientation="vertical", adaptive_height=True, spacing=dp(20), padding=[0, dp(8), 0, dp(30)])
         self.url_bar = UrlBar()
         self.video_card = VideoCard()
         self.download_panel = DownloadPanel()
@@ -66,7 +61,9 @@ class HomeScreen(MDScreen):
 
         enabled = bool(self.settings.get("clipboard_monitoring", True))
         self.clipboard = ClipboardService(self.clipboard_detected, enabled=enabled)
-        App.get_running_app().clipboard_service = self.clipboard
+        app = App.get_running_app()
+        if app is not None:
+            app.clipboard_service = self.clipboard
 
     def analyze(self, *args):
         url = self.url_bar.url_input.text.strip()
@@ -77,9 +74,6 @@ class HomeScreen(MDScreen):
 
     def _analyze_worker(self, url):
         try:
-            # A normal video only needs one metadata extraction. Playlist
-            # extraction is performed separately when the URL actually has a
-            # playlist parameter, avoiding two network extractions for videos.
             playlist = PlaylistMetadata()
             if "list=" in url:
                 playlist = self.playlists.get_playlist_info(url)
@@ -96,9 +90,7 @@ class HomeScreen(MDScreen):
         self.metadata = metadata
         self.video_card.set_title(metadata.title or "Untitled")
         self.video_card.set_channel(metadata.channel or "Unknown channel")
-        self.video_card.set_details(
-            f"{format_duration(metadata.duration)} • {format_number(metadata.views)} views"
-        )
+        self.video_card.set_details(f"{format_duration(metadata.duration)} • {format_number(metadata.views)} views")
         if metadata.thumbnail:
             self.video_card.set_thumbnail(metadata.thumbnail)
         self.download_panel.load_metadata(metadata)
@@ -115,9 +107,6 @@ class HomeScreen(MDScreen):
         self.playlist_progress.opacity = 1
         for video in videos:
             self._enqueue(self.factory.build(video["url"], video["title"]))
-        # QueueScreen is the authoritative live status view. The progress
-        # indicator is hidden after enqueueing rather than pretending that the
-        # UI coordinator owns completion events.
         self.playlist_progress.opacity = 0
 
     def download(self, *args):
@@ -134,8 +123,9 @@ class HomeScreen(MDScreen):
         if item is None:
             return
         self.queue.enqueue(item)
-        queue_screen = App.get_running_app().sm.get_screen("queue")
-        queue_screen.refresh()
+        app = App.get_running_app()
+        if app is not None and "queue" in app.sm.screen_names:
+            app.sm.get_screen("queue").refresh()
         self.notifications.show("Download Queued", item.title or "Download")
 
     def clipboard_detected(self, url):
@@ -149,11 +139,3 @@ class HomeScreen(MDScreen):
                 self.metadata.thumbnail or "",
             )
             self.video_card.favorite_button.icon = "heart"
-
-    def on_leave(self, *_args):
-        # Clipboard monitoring is app-scoped and intentionally remains active
-        # while the user navigates between screens.
-        return None
-
-    def on_stop(self):
-        self.clipboard.shutdown()
